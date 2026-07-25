@@ -1,0 +1,54 @@
+// The design leans on hover / active states that swap neumorphic box-shadows —
+// something React inline styles can't express. These shared helper classes
+// carry those transitions so the JSX can stay declarative. `!important` beats
+// the element's inline base shadow.
+
+.ml-lift:hover { transform: translateY(-1px); }
+
+.ml-press:active { box-shadow: var(--inSm) !important; }
+
+.ml-press-flat {
+  &:active {
+    box-shadow: var(--inSm) !important;
+    transform: none !important;
+  }
+}
+
+.ml-hov-acc:hover { color: var(--acc) !important; }
+.ml-hov-red:hover { color: var(--red) !important; }
+.ml-hov-out:hover { box-shadow: var(--outSm) !important; }
+.ml-hov-accsoft:hover { background: var(--accSoft) !important; }
+
+.ml-menu-item:hover {
+  background: var(--accSoft) !important;
+  color: var(--acc) !important;
+}
+
+.ml-menu-item-danger:hover { background: var(--amberSoft) !important; }
+
+.ml-sug {
+  &:hover {
+    color: var(--acc) !important;
+    transform: translateY(-1px);
+  }
+  &:active {
+    box-shadow: var(--inSm) !important;
+    transform: none !important;
+  }
+}
+
+.ml-cite:hover {
+  background: var(--accGrad) !important;
+  color: var(--accTx) !important;
+}
+
+.ml-add-btn {
+  &:hover {
+    color: var(--acc) !important;
+    transform: translateY(-1px);
+  }
+  &:active {
+    box-shadow: var(--inSm) !important;
+    transform: none !important;
+  }
+}

@@ -1,0 +1,240 @@
+.notebooks-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 26px 32px 70px;
+  min-height: 100vh;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    &--brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    &--logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: var(--grad);
+      box-shadow: var(--outSm);
+      display: grid;
+      place-items: center;
+      color: var(--acc);
+    }
+
+    &--title {
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+
+    &--spacer {
+      flex: 1;
+    }
+
+    &--profile {
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      box-shadow: var(--inSm);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 13px;
+      color: var(--acc);
+      cursor: pointer;
+    }
+  }
+
+  &__title-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    margin: 48px 0 26px;
+
+    &--title {
+      font-size: 30px;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -0.6px;
+    }
+
+    &--count {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--tx2);
+      margin-top: 7px;
+    }
+
+    &--spacer {
+      flex: 1;
+    }
+
+    &--btn-new {
+      border: none;
+      background: var(--accGrad);
+      color: var(--accTx);
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 12px 24px;
+      border-radius: 999px;
+      box-shadow: var(--outSm);
+      cursor: pointer;
+    }
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(242px, 1fr));
+    gap: 20px;
+  }
+
+  &__card-new {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 172px;
+    border-radius: 20px;
+    box-shadow: var(--in);
+    border: 1.5px dashed var(--sd);
+    cursor: pointer;
+    color: var(--tx2);
+
+    &--plus {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: var(--grad);
+      box-shadow: var(--outSm);
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    &--label {
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    &--sub {
+      font-family: 'DM Mono', monospace;
+      font-size: 10.5px;
+    }
+  }
+
+  &__card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 172px;
+    border-radius: 20px;
+    background: var(--grad);
+    box-shadow: var(--out);
+    padding: 18px;
+    cursor: pointer;
+
+    &--active-menu {
+      z-index: 6;
+    }
+
+    &--top {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    &--icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 13px;
+      box-shadow: var(--inSm);
+      display: grid;
+      place-items: center;
+      color: var(--acc);
+    }
+
+    &--spacer {
+      flex: 1;
+    }
+
+    &--menu-btn {
+      width: 30px;
+      height: 30px;
+      border: none;
+      border-radius: 999px;
+      background: var(--bg);
+      box-shadow: var(--outSm);
+      color: var(--tx2);
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1;
+      font-family: 'Nunito', sans-serif;
+    }
+
+    &--title {
+      font-weight: 800;
+      font-size: 15.5px;
+      margin-top: 14px;
+      line-height: 1.35;
+    }
+
+    &--desc {
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--tx2);
+      margin-top: 5px;
+      flex: 1;
+      text-wrap: pretty;
+    }
+
+    &--meta {
+      font-family: 'DM Mono', monospace;
+      font-size: 10.5px;
+      color: var(--tx2);
+      margin-top: 14px;
+    }
+  }
+
+  &__menu {
+    position: absolute;
+    right: 14px;
+    top: 52px;
+    z-index: 5;
+    width: 168px;
+    border-radius: 15px;
+    background: var(--grad);
+    box-shadow: var(--out);
+    padding: 7px;
+
+    &--item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border: none;
+      background: none;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--tx);
+      cursor: pointer;
+      text-align: left;
+
+      &-danger {
+        color: var(--red);
+      }
+    }
+  }
+}

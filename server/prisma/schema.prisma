@@ -1,0 +1,325 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+    provider = "prisma-client"
+    output   = "../src/generated/prisma"
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+
+enum AuthProvider {
+  GOOGLE
+  GITHUB
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  name      String
+  avatarUrl String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  accounts  Account[]
+  notebooks Notebook[]
+}
+
+model Account {
+  id                String       @id @default(uuid())
+  provider          AuthProvider
+  providerAccountId String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// ── Notebooks & sources ───────────────────────────────────────────────────
+
+model Notebook {
+  id          String   @id @default(uuid())
+  name        String
+  description String   @default("")
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sources Source[]
+  queries Query[]
+
+  mindMap       MindMap?
+  quiz          Quiz?
+  conceptTable  ConceptTable?
+  flashcardDeck FlashcardDeck?
+  summary       Summary?
+  audioOverview AudioOverview?
+  timeline      Timeline?
+
+  @@index([ownerId])
+}
+
+enum SourceType {
+  PDF
+  URL
+  YT
+  GDOC
+  TEXT
+}
+
+enum SourceStatus {
+  PENDING
+  PROCESSING
+  INDEXED
+  FAILED
+}
+
+model Source {
+  id      String       @id @default(uuid())
+  name    String
+  type    SourceType
+  /// URL for PDF (S3 object URL), URL, YT and GDOC. Raw body for TEXT.
+  content String
+  meta    String       @default("")
+  status  SourceStatus @default(PENDING)
+
+  keyPoints String[] @default([])
+  excerpts  String[] @default([])
+
+  s3Key        String?
+  mimeType     String?
+  fileSize     Int?
+  chunkCount   Int?
+  errorMessage String?
+  indexedAt    DateTime?
+
+  notebook   Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  notebookId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  queryToSources QueryToSource[]
+
+  @@index([notebookId])
+  @@index([notebookId, status])
+}
+
+// ── Chat / retrieval ──────────────────────────────────────────────────────
+
+enum QueryType {
+  USER
+  DEVELOPER
+}
+
+model Query {
+  id         String    @id @default(uuid())
+  query      String
+  answer     String?
+  query_type QueryType @default(USER)
+  notebook   Notebook  @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  notebookId String
+  createdAt  DateTime  @default(now())
+
+  queryToSources QueryToSource[]
+
+  @@index([notebookId])
+}
+
+model QueryToSource {
+  id        String  @id @default(uuid())
+  source    Source  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  sourceId  String
+  query     Query   @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  queryId   String
+  score     Float?
+  chunkText String?
+
+  @@unique([queryId, sourceId])
+  @@index([sourceId])
+}
+
+// ── Tool: Mind map ────────────────────────────────────────────────────────
+
+model MindMap {
+  id          String   @id @default(uuid())
+  title       String   @default("Mind map")
+  generatedMs Int      @default(0)
+  notebook    Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  notebookId  String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  nodes MindMapNode[]
+}
+
+model MindMapNode {
+  id        String  @id @default(uuid())
+  label     String
+  isMain    Boolean @default(false)
+  x         Float
+  y         Float
+  order     Int     @default(0)
+  mindMap   MindMap @relation(fields: [mindMapId], references: [id], onDelete: Cascade)
+  mindMapId String
+
+  @@index([mindMapId])
+}
+
+// ── Tool: Quiz ────────────────────────────────────────────────────────────
+
+model Quiz {
+  id         String   @id @default(uuid())
+  title      String   @default("Quiz")
+  notebook   Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  notebookId String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  questions QuizQuestion[]
+}
+
+model QuizQuestion {
+  id           String   @id @default(uuid())
+  question     String
+  sourceLabel  String   @default("")
+  correctIndex Int
+  options      String[]
+  order        Int      @default(0)
+  quiz         Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quizId       String
+
+  @@index([quizId])
+}
+
+// ── Tool: Concept table ───────────────────────────────────────────────────
+
+model ConceptTable {
+  id         String   @id @default(uuid())
+  title      String   @default("Concept table")
+  notebook   Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  notebookId String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  rows ConceptRow[]
+}
+
+model ConceptRow {
+  id             String       @id @default(uuid())
+  concept        String
+  bestSource     String
+  mentions       Int          @default(0)
+  /// Confidence percentage, 0-100. Drives the bar width in the UI.
+  confidence     Int          @default(0)
+  order          Int          @default(0)
+  conceptTable   ConceptTable @relation(fields: [conceptTableId], references: [id], onDelete: Cascade)
+  conceptTableId String
+
+  @@index([conceptTableId])
+}
+
+// ── Tool: Flashcards ──────────────────────────────────────────────────────
+
+model FlashcardDeck {
+  id         String   @id @default(uuid())
+  title      String   @default("Flashcards")
+  notebook   Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  notebookId String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  cards Flashcard[]
+}
+
+model Flashcard {
+  id     String        @id @default(uuid())
+  front  String
+  back   String
+  order  Int           @default(0)
+  deck   FlashcardDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  deckId String
+
+  @@index([deckId])
+}
+
+// ── Tool: Summary ─────────────────────────────────────────────────────────
+
+model Summary {
+  id          String   @id @default(uuid())
+  title       String   @default("Study brief")
+  intro       String   @default("")
+  readMinutes Int      @default(0)
+  sourceCount Int      @default(0)
+  notebook    Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  notebookId  String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  points SummaryPoint[]
+}
+
+model SummaryPoint {
+  id        String  @id @default(uuid())
+  /// Display number as shown in the UI, e.g. "01".
+  number    String
+  heading   String
+  body      String
+  order     Int     @default(0)
+  summary   Summary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  summaryId String
+
+  @@index([summaryId])
+}
+
+// ── Tool: Audio overview ──────────────────────────────────────────────────
+
+enum AudioStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model AudioOverview {
+  id              String      @id @default(uuid())
+  tag             String      @default("DEEP DIVE · TWO HOSTS")
+  title           String
+  subtitle        String      @default("")
+  durationSeconds Int         @default(0)
+  audioUrl        String?
+  s3Key           String?
+  status          AudioStatus @default(PENDING)
+  notebook        Notebook    @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  notebookId      String      @unique
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// ── Tool: Timeline ────────────────────────────────────────────────────────
+
+model Timeline {
+  id         String   @id @default(uuid())
+  title      String   @default("Timeline")
+  notebook   Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  notebookId String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  events TimelineEvent[]
+}
+
+model TimelineEvent {
+  id          String   @id @default(uuid())
+  year        String
+  title       String
+  description String
+  order       Int      @default(0)
+  timeline    Timeline @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  timelineId  String
+
+  @@index([timelineId])
+}

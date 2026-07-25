@@ -1,0 +1,20 @@
+.root-layout {
+  min-height: 100vh;
+  background:
+    radial-gradient(1000px 560px at 88% -6%, var(--accSoft), transparent 62%),
+    radial-gradient(900px 560px at -8% 104%, var(--accSoft), transparent 58%),
+    var(--bg);
+  color: var(--tx);
+  font-family: 'Nunito', system-ui, sans-serif;
+
+  &__progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    z-index: 100;
+    background: var(--accGrad);
+    animation: mlPulse 1.2s ease-in-out infinite;
+  }
+}

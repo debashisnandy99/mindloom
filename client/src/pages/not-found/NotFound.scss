@@ -1,0 +1,42 @@
+.not-found {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  text-align: center;
+
+  &__code {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: var(--tx2);
+  }
+
+  &__title {
+    font-size: 40px;
+    font-weight: 800;
+    margin: 14px 0 10px;
+    letter-spacing: -1px;
+  }
+
+  &__description {
+    color: var(--tx2);
+    max-width: 420px;
+    margin: 0 auto 26px;
+    line-height: 1.6;
+  }
+
+  &__link {
+    display: inline-block;
+    border: none;
+    background: var(--accGrad);
+    color: var(--accTx);
+    font-family: 'Nunito', sans-serif;
+    font-weight: 800;
+    font-size: 14px;
+    padding: 12px 24px;
+    border-radius: 999px;
+    box-shadow: var(--outSm);
+    text-decoration: none;
+  }
+}

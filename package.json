@@ -1,0 +1,21 @@
+{
+  "name": "mindloom-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mindloom — NotebookLM-style research workspace",
+  "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "prepare": "husky",
+    "lint": "bun run --filter mindloom lint",
+    "typecheck": "bun run --filter mindloom-server typecheck && bun run --filter mindloom typecheck",
+    "precommit": "lint-staged"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2"
+  }
+}

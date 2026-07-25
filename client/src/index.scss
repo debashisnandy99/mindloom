@@ -1,0 +1,55 @@
+@use 'styles/tokens';
+@use 'styles/interactions';
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #e6eaf3;
+  font-family: 'Nunito', system-ui, sans-serif;
+}
+
+a {
+  color: oklch(0.55 0.105 295);
+  text-decoration: none;
+
+  &:hover {
+    color: oklch(0.45 0.115 295);
+    text-decoration: underline;
+  }
+}
+
+#mlroot {
+  @include tokens.light-tokens;
+
+  &[data-ml-theme='dark'] {
+    @include tokens.dark-tokens;
+  }
+}
+
+// Thin, theme-aware scrollbars everywhere.
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sd) transparent;
+}
+
+@keyframes mlPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+@keyframes mlBlink {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+
+@keyframes mlEq {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}

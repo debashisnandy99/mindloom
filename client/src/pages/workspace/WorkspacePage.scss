@@ -1,0 +1,23 @@
+.workspace-page {
+  height: 100vh;
+  box-sizing: border-box;
+  display: grid;
+  gap: 13px;
+  padding: 18px;
+  overflow: hidden;
+
+  &__resizer {
+    cursor: col-resize;
+    touch-action: none;
+    display: grid;
+    place-items: center;
+    border-radius: 99px;
+
+    &-handle {
+      width: 4px;
+      height: 52px;
+      border-radius: 99px;
+      box-shadow: var(--inSm);
+    }
+  }
+}

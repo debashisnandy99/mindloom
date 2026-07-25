@@ -1,0 +1,44 @@
+.error-boundary {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  text-align: center;
+
+  &__card {
+    max-width: 460px;
+  }
+
+  &__code {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: var(--tx2);
+  }
+
+  &__title {
+    font-size: 34px;
+    font-weight: 800;
+    margin: 14px 0 12px;
+    letter-spacing: -1px;
+  }
+
+  &__message {
+    color: var(--tx2);
+    line-height: 1.6;
+    margin: 0 0 26px;
+  }
+
+  &__button {
+    border: none;
+    background: var(--accGrad);
+    color: var(--accTx);
+    font-family: 'Nunito', sans-serif;
+    font-weight: 800;
+    font-size: 14px;
+    padding: 12px 24px;
+    border-radius: 999px;
+    box-shadow: var(--outSm);
+    cursor: pointer;
+  }
+}
