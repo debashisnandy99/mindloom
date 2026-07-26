@@ -1,17 +1,11 @@
 import { useEffect, type ReactNode } from 'react'
 import { Provider } from 'react-redux'
-import { reduxStore, useAppDispatch } from './reduxStore'
-import { bootstrapIndexing, clearStoreTimers } from './thunks'
+import { reduxStore } from './reduxStore'
+import { clearStoreTimers } from './thunks'
 
-/** Mount-time side effects that used to live in the Context facade. */
+/** Tears down module-level timers when the app unmounts. */
 function StoreBootstrap({ children }: { children: ReactNode }) {
-  const dispatch = useAppDispatch()
-
-  useEffect(() => {
-    dispatch(bootstrapIndexing())
-    return () => clearStoreTimers()
-  }, [dispatch])
-
+  useEffect(() => () => clearStoreTimers(), [])
   return children
 }
 

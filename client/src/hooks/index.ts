@@ -6,6 +6,7 @@ export { useNotebooks, useNotebook } from './queries/useNotebooks'
 export { useSources, useSource } from './queries/useSources'
 export { useTool } from './queries/useTool'
 export { useChatHistory } from './queries/useChatHistory'
+export { useToolStatus, useToolGeneration } from './queries/useToolGeneration'
 
 // Mutations (writes)
 export { useLogout } from './mutations/useLogout'
@@ -27,6 +28,9 @@ export {
   useSearchChunks,
   useDeleteQuery,
 } from './mutations/useQueryMutations'
+export { useStreamingAnswer } from './mutations/useStreamingAnswer'
+export type { StreamingAnswerState } from './mutations/useStreamingAnswer'
+export { useRegenerateTools } from './mutations/useRegenerateTools'
 
 // Server-Sent Events
 export { useNotebookEvents } from './events/useNotebookEvents'

@@ -40,6 +40,34 @@ const envSchema = z.object({
   EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(3072),
   EMBEDDING_BATCH_SIZE: z.coerce.number().int().positive().default(64),
 
+  /** Small, cheap model used only to rewrite the query before retrieval. */
+  QUERY_REWRITE_MODEL: z.string().default("gpt-4o-mini"),
+
+  /** OpenAI model used to generate the study tools (structured output). */
+  TOOL_GENERATION_MODEL: z.string().default("gpt-4o-mini"),
+  /** Concurrent tool-generation jobs per worker process. */
+  TOOL_GENERATION_CONCURRENCY: z.coerce.number().int().positive().default(2),
+  /** Max characters of source context fed to the generator. */
+  TOOL_CONTEXT_BUDGET: z.coerce.number().int().positive().default(24_000),
+
+  // ── Answer generation (xAI / Grok) ──────────────────────────────────────
+  // Optional so the server still boots without it; the retrieval endpoints
+  // fail with a clear message instead of crashing at startup.
+  XAI_API_KEY: z.string().optional(),
+  XAI_MODEL: z.string().default("grok-4.5"),
+  XAI_BASE_URL: z.string().optional(),
+
+  // ── Retrieval tuning ────────────────────────────────────────────────────
+  /** Chunks handed to the generator after fusion. */
+  RETRIEVAL_TOP_K: z.coerce.number().int().positive().default(8),
+  /** Per-query candidates pulled from Qdrant before fusion. */
+  RETRIEVAL_CANDIDATES: z.coerce.number().int().positive().default(12),
+  /**
+   * Minimum cosine similarity for a chunk to count as relevant. Below this the
+   * answer is refused as "not in your sources" rather than hallucinated.
+   */
+  RETRIEVAL_MIN_SCORE: z.coerce.number().min(0).max(1).default(0.25),
+
   CHUNK_SIZE: z.coerce.number().int().positive().default(1000),
   CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(200),
 

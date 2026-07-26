@@ -1,23 +1,28 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import { INITIAL_NOTEBOOKS } from '../../data'
-import type { Notebook } from '../../types'
 
+/**
+ * The notebook list is server data (`useNotebooks`). This slice only holds the
+ * transient UI for the notebooks page: the create/edit modal and the per-card
+ * options menu / delete confirmation.
+ */
 type NbModal = 'new' | 'edit' | null
 
+export interface EditingNotebook {
+  id: string
+  name: string
+  description: string
+}
+
 export interface NotebooksState {
-  notebooks: Notebook[]
-  activeNbId: number | null
-  nbMenuId: number | null
-  nbConfirmId: number | null
+  nbMenuId: string | null
+  nbConfirmId: string | null
   nbModal: NbModal
-  nbEditId: number | null
+  nbEditId: string | null
   nbDraft: string
   nbDescDraft: string
 }
 
 const initialState: NotebooksState = {
-  notebooks: INITIAL_NOTEBOOKS,
-  activeNbId: 1,
   nbMenuId: null,
   nbConfirmId: null,
   nbModal: null,
@@ -37,12 +42,12 @@ export const notebooksSlice = createSlice({
       state.nbDescDraft = ''
       state.nbMenuId = null
     },
-    openEditNb(state, action: PayloadAction<Notebook>) {
+    openEditNb(state, action: PayloadAction<EditingNotebook>) {
       const nb = action.payload
       state.nbModal = 'edit'
       state.nbEditId = nb.id
-      state.nbDraft = nb.title
-      state.nbDescDraft = nb.desc
+      state.nbDraft = nb.name
+      state.nbDescDraft = nb.description
       state.nbMenuId = null
     },
     cancelNb(state) {
@@ -54,29 +59,10 @@ export const notebooksSlice = createSlice({
     setNbDescDraft(state, action: PayloadAction<string>) {
       state.nbDescDraft = action.payload
     },
-    createNotebook(state, action: PayloadAction<Notebook>) {
-      state.notebooks.unshift(action.payload)
+    closeNbModal(state) {
       state.nbModal = null
     },
-    updateNotebook(
-      state,
-      action: PayloadAction<{ id: number; title: string; desc: string }>,
-    ) {
-      const { id, title, desc } = action.payload
-      const nb = state.notebooks.find((n) => n.id === id)
-      if (nb) {
-        if (title) nb.title = title
-        if (desc) nb.desc = desc
-        nb.updated = 'just now'
-      }
-      state.nbModal = null
-    },
-    openNb(state, action: PayloadAction<number>) {
-      state.activeNbId = action.payload
-      state.nbMenuId = null
-      state.nbConfirmId = null
-    },
-    toggleNbMenu(state, action: PayloadAction<number>) {
+    toggleNbMenu(state, action: PayloadAction<string>) {
       state.nbMenuId = state.nbMenuId === action.payload ? null : action.payload
       state.nbConfirmId = null
     },
@@ -84,17 +70,8 @@ export const notebooksSlice = createSlice({
       state.nbMenuId = null
       state.nbConfirmId = null
     },
-    setNbConfirmId(state, action: PayloadAction<number>) {
+    setNbConfirmId(state, action: PayloadAction<string>) {
       state.nbConfirmId = action.payload
-    },
-    deleteNotebook(state, action: PayloadAction<number>) {
-      const id = action.payload
-      state.notebooks = state.notebooks.filter((n) => n.id !== id)
-      state.nbMenuId = null
-      state.nbConfirmId = null
-      if (state.activeNbId === id) {
-        state.activeNbId = state.notebooks[0]?.id ?? null
-      }
     },
     resetNbUi(state) {
       state.nbMenuId = null
@@ -109,13 +86,10 @@ export const {
   cancelNb,
   setNbDraft,
   setNbDescDraft,
-  createNotebook,
-  updateNotebook,
-  openNb,
+  closeNbModal,
   toggleNbMenu,
   closeNbMenu,
   setNbConfirmId,
-  deleteNotebook,
   resetNbUi,
 } = notebooksSlice.actions
 

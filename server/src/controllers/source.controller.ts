@@ -6,6 +6,7 @@ import {
   listSources,
 } from "../models/source.model.js";
 import { prisma } from "../config/prisma.js";
+import { regenerateNotebookTools } from "../services/generation/regenerate.js";
 import { enqueueIndexingJob, removeIndexingJob } from "../services/indexing/queue.js";
 import { tryDeleteSourceVectors } from "../services/indexing/vectorStore.js";
 import { deleteFromS3, getPresignedUrl, uploadPdfToS3 } from "../services/storage/s3.service.js";
@@ -109,6 +110,9 @@ export const destroy = asyncHandler(async (req, res) => {
   await tryDeleteSourceVectors(source.notebookId, sourceId);
   if (source.s3Key) await deleteFromS3(source.s3Key);
   await deleteSource(sourceId);
+
+  // The notebook's content changed, so its study tools are now stale.
+  await regenerateNotebookTools(source.notebookId, req.user!.id).catch(() => undefined);
 
   sendNoContent(res);
 });

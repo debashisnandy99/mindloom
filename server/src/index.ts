@@ -1,8 +1,9 @@
 import type { Server } from "node:http";
 import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./config/prisma.js";
-import { disconnectRedis } from "./config/redis.js";
+import { connectRedis, disconnectRedis } from "./config/redis.js";
 import { env } from "./env.js";
+import { closeToolGenerationQueue } from "./services/generation/queue.js";
 import { closeIndexingQueue } from "./services/indexing/queue.js";
 import { shutdownSse } from "./services/sse/sse.service.js";
 import { logger } from "./utils/logger.js";
@@ -27,6 +28,7 @@ async function shutdown(signal: string, exitCode = 0): Promise<void> {
     }
     await shutdownSse();
     await closeIndexingQueue();
+    await closeToolGenerationQueue();
     await disconnectDatabase();
     await disconnectRedis();
     logger.info("shutdown complete");
@@ -40,6 +42,9 @@ async function shutdown(signal: string, exitCode = 0): Promise<void> {
 }
 
 async function start(): Promise<void> {
+  await connectRedis();
+  logger.info("session redis connected");
+
   await connectDatabase();
   logger.info("database connected");
 

@@ -22,9 +22,11 @@ export const sourceKeys = {
 export const toolKeys = {
   all: ['tools'] as const,
   tool: (notebookId: string, tool: string) => [...toolKeys.all, notebookId, tool] as const,
+  status: (notebookId: string) => [...toolKeys.all, 'status', notebookId] as const,
 }
 
 export const chatKeys = {
   all: ['chat'] as const,
   list: (notebookId: string) => [...chatKeys.all, 'list', notebookId] as const,
+  suggestions: (notebookId: string) => [...chatKeys.all, 'suggestions', notebookId] as const,
 }
