@@ -261,7 +261,14 @@ export interface QueryToSource {
   queryId: string
   score: number | null
   chunkText: string | null
-  source?: { id: string; name: string }
+  sourceType: ServerSourceType | null
+  timestamp: string | null
+  startSeconds: number | null
+  pageNumber: number | null
+  chunkIndex: number | null
+  contentUrl: string | null
+  label: string | null
+  source?: { id: string; name: string; type?: ServerSourceType; content?: string }
 }
 
 export interface ChatQuery {
@@ -280,7 +287,13 @@ export interface RetrievedChunk {
   text: string
   sourceId: string
   sourceName: string
+  sourceType?: ServerSourceType
   chunkIndex: number
+  timestamp?: string
+  startSeconds?: number
+  pageNumber?: number
+  contentUrl?: string
+  label?: string
 }
 
 export interface AskResult {

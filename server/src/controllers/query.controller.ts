@@ -4,6 +4,7 @@ import {
   NO_CONTEXT_MESSAGE,
   streamGroundedAnswer,
 } from "../services/generation/answer.service.js";
+import { enrichCitations } from "../services/retrieval/enrichCitations.js";
 import {
   answerQuery,
   retrieveRelevantChunks,
@@ -23,7 +24,7 @@ export const listQueries = asyncHandler(async (req, res) => {
     orderBy: { createdAt: "asc" },
     include: {
       queryToSources: {
-        include: { source: { select: { id: true, name: true } } },
+        include: { source: { select: { id: true, name: true, type: true, content: true } } },
       },
     },
   });
@@ -33,7 +34,7 @@ export const listQueries = asyncHandler(async (req, res) => {
 /**
  * `QueryToSource` is unique on `(queryId, sourceId)`, but several retrieved
  * chunks routinely come from the same source. Collapse them to one link per
- * source, keeping the best-scoring chunk as the stored excerpt.
+ * source, keeping the best-scoring chunk and its locator for history clicks.
  */
 function toSourceLinks(citations: RetrievedChunk[]) {
   const bySource = new Map<string, RetrievedChunk>();
@@ -48,6 +49,13 @@ function toSourceLinks(citations: RetrievedChunk[]) {
     sourceId: chunk.sourceId,
     score: chunk.score,
     chunkText: chunk.text,
+    sourceType: chunk.sourceType ?? null,
+    timestamp: chunk.timestamp ?? null,
+    startSeconds: chunk.startSeconds ?? null,
+    pageNumber: chunk.pageNumber ?? null,
+    chunkIndex: chunk.chunkIndex ?? null,
+    contentUrl: chunk.contentUrl ?? null,
+    label: chunk.label ?? null,
   }));
 }
 
@@ -60,7 +68,11 @@ function persistQuery(notebookId: string, query: string, answer: string, citatio
       query_type: "USER",
       queryToSources: { create: toSourceLinks(citations) },
     },
-    include: { queryToSources: true },
+    include: {
+      queryToSources: {
+        include: { source: { select: { id: true, name: true, type: true, content: true } } },
+      },
+    },
   });
 }
 
@@ -75,12 +87,13 @@ export const ask = asyncHandler(async (req, res) => {
   const { query, sourceIds, topK } = req.body as CreateQueryBody;
 
   const result = await answerQuery(notebookId, query, { sourceIds, topK });
-  const record = await persistQuery(notebookId, query, result.answer, result.citations);
+  const citations = await enrichCitations(result.citations);
+  const record = await persistQuery(notebookId, query, result.answer, citations);
 
   sendSuccess(res, {
     query: record,
     answer: result.answer,
-    citations: result.citations,
+    citations,
     grounded: result.grounded,
   });
 });
@@ -105,6 +118,7 @@ export const askStream = asyncHandler(async (req, res) => {
     sourceIds,
     topK,
   });
+  const citations = found ? await enrichCitations(chunks) : [];
 
   req.socket.setTimeout(0);
   req.socket.setNoDelay(true);
@@ -126,7 +140,7 @@ export const askStream = asyncHandler(async (req, res) => {
   const abort = new AbortController();
   res.on("close", () => abort.abort());
 
-  send("meta", { found, citations: chunks });
+  send("meta", { found, citations });
 
   let answer = "";
 
@@ -145,7 +159,7 @@ export const askStream = asyncHandler(async (req, res) => {
     // answer is not worth writing to their history.
     if (abort.signal.aborted) return res.end();
 
-    const record = await persistQuery(notebookId, query, answer, found ? chunks : []);
+    const record = await persistQuery(notebookId, query, answer, citations);
     send("done", { queryId: record.id, answer, grounded: found });
   } catch (err) {
     if (abort.signal.aborted) return res.end();
@@ -164,7 +178,7 @@ export const search = asyncHandler(async (req, res) => {
     sourceIds,
     topK,
   });
-  sendSuccess(res, { chunks });
+  sendSuccess(res, { chunks: await enrichCitations(chunks) });
 });
 
 export const deleteQuery = asyncHandler(async (req, res) => {

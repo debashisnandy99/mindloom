@@ -157,13 +157,24 @@ export async function searchChunks(
 
   return result.map((point) => {
     const payload = (point.payload ?? {}) as Partial<ChunkMetadata>;
+    const startSeconds =
+      typeof payload.startSeconds === "number" ? payload.startSeconds : undefined;
+    const pageNumber =
+      typeof payload.pageNumber === "number" ? payload.pageNumber : undefined;
+    const timestamp =
+      typeof payload.timestamp === "string" ? payload.timestamp : undefined;
+
     return {
       id: String(point.id),
       score: point.score,
       text: payload.text ?? "",
       sourceId: payload.sourceId ?? "",
       sourceName: payload.sourceName ?? "",
+      sourceType: payload.sourceType,
       chunkIndex: payload.chunkIndex ?? 0,
+      timestamp,
+      startSeconds,
+      pageNumber,
     };
   });
 }

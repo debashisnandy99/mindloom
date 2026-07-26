@@ -43,5 +43,6 @@ export const API_ENDPOINTS = {
     search: (notebookId: string) => `/notebooks/${notebookId}/search`,
     detail: (notebookId: string, queryId: string) =>
       `/notebooks/${notebookId}/queries/${queryId}`,
+    suggestions: (notebookId: string) => `/notebooks/${notebookId}/suggestions`,
   },
 } as const

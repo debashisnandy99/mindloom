@@ -8,6 +8,7 @@ import { setSrcPct } from '../../../store/slices/layoutSlice'
 import { closeViewer, openAdd, selectSource } from '../../../store/slices/sourcesSlice'
 import { showToast } from '../../../store/thunks'
 import { useNotebookId } from '../WorkspaceContext'
+import { SourceViewer, SourceViewerMeta } from './SourceViewer'
 import './SidePanel.scss'
 
 export function SidePanel() {
@@ -15,6 +16,7 @@ export function SidePanel() {
   const dispatch = useAppDispatch()
   const { data: sources = [] } = useSources(notebookId)
   const selectedId = useAppSelector((s) => s.sources.selectedId)
+  const citation = useAppSelector((s) => s.sources.citation)
   const srcPct = useAppSelector((s) => s.layout.srcPct)
 
   const ready = sources.filter((s) => s.status === 'INDEXED')
@@ -138,7 +140,7 @@ export function SidePanel() {
               </div>
               <div className="side-panel__spacer">
                 <div className="side-panel__title side-panel__title--viewer">{sel.name}</div>
-                <div className="side-panel__viewer-meta">● indexed · {sel.meta}</div>
+                <SourceViewerMeta source={sel} citation={citation} />
               </div>
               <button
                 onClick={() => dispatch(closeViewer())}
@@ -149,22 +151,7 @@ export function SidePanel() {
               </button>
             </div>
             <div className="side-panel__viewer-content">
-              <div className="side-panel__viewer-section-title">KEY POINTS</div>
-              {sel.keyPoints.length === 0 && (
-                <div className="side-panel__viewer-point"><span>No key points extracted.</span></div>
-              )}
-              {sel.keyPoints.map((p, i) => (
-                <div key={i} className="side-panel__viewer-point">
-                  <span className="side-panel__viewer-point-bullet">·</span>
-                  <span>{p}</span>
-                </div>
-              ))}
-              <div className="side-panel__viewer-section-title side-panel__viewer-section-title--excerpt">EXCERPT</div>
-              {sel.excerpts.map((p, i) => (
-                <p key={i} className="side-panel__viewer-paragraph">
-                  {p}
-                </p>
-              ))}
+              <SourceViewer source={sel} citation={citation} />
             </div>
           </div>
         </>

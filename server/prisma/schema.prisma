@@ -175,13 +175,21 @@ model Query {
 }
 
 model QueryToSource {
-  id        String  @id @default(uuid())
-  source    Source  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  sourceId  String
-  query     Query   @relation(fields: [queryId], references: [id], onDelete: Cascade)
-  queryId   String
-  score     Float?
-  chunkText String?
+  id           String      @id @default(uuid())
+  source       Source      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  sourceId     String
+  query        Query       @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  queryId      String
+  score        Float?
+  chunkText    String?
+  sourceType   SourceType?
+  timestamp    String?
+  startSeconds Int?
+  pageNumber   Int?
+  chunkIndex   Int?
+  /// Snapshot of Source.content (YT/URL/GDOC) at answer time for history clicks.
+  contentUrl   String?
+  label        String?
 
   @@unique([queryId, sourceId])
   @@index([sourceId])

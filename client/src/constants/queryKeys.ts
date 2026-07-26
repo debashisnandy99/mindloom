@@ -28,4 +28,5 @@ export const toolKeys = {
 export const chatKeys = {
   all: ['chat'] as const,
   list: (notebookId: string) => [...chatKeys.all, 'list', notebookId] as const,
+  suggestions: (notebookId: string) => [...chatKeys.all, 'suggestions', notebookId] as const,
 }

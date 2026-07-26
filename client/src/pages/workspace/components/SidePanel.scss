@@ -272,6 +272,56 @@
       color: var(--tx2);
       margin: 0 0 12px;
       text-wrap: pretty;
+
+      &--cite {
+        color: var(--tx);
+        padding: 10px 12px;
+        border-radius: 12px;
+        box-shadow: var(--inSm);
+        background: var(--bg);
+      }
+    }
+
+    &-media {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 0;
+    }
+
+    &-iframe {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      background: var(--bg);
+      box-shadow: var(--inSm);
+
+      &--yt {
+        aspect-ratio: 16 / 9;
+        min-height: 180px;
+      }
+
+      &--pdf {
+        min-height: 280px;
+        height: 55vh;
+        max-height: 520px;
+      }
+    }
+
+    &-open-link {
+      align-self: flex-start;
+      margin-top: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--acc);
+      text-decoration: none;
+    }
+
+    &-mark {
+      background: var(--accSoft);
+      color: var(--accDeep);
+      border-radius: 4px;
+      padding: 0 2px;
     }
   }
 }

@@ -6,6 +6,7 @@ import { chatKeys } from '../../constants/queryKeys'
 import { ApiError } from '../../lib/apiClient'
 
 export interface StreamingAnswerState {
+  query: string | null
   /** The answer so far, growing as deltas arrive. */
   answer: string
   citations: RetrievedChunk[]
@@ -13,14 +14,17 @@ export interface StreamingAnswerState {
   grounded: boolean | null
   isStreaming: boolean
   error: string | null
+  completedQueryId: string | null
 }
 
 const IDLE: StreamingAnswerState = {
+  query: null,
   answer: '',
   citations: [],
   grounded: null,
   isStreaming: false,
   error: null,
+  completedQueryId: null,
 }
 
 /**
@@ -63,7 +67,7 @@ export function useStreamingAnswer(notebookId: string | undefined) {
       abortRef.current = controller
 
       const payload: AskInput = typeof input === 'string' ? { query: input } : input
-      setState({ ...IDLE, isStreaming: true })
+      setState({ ...IDLE, query: payload.query, isStreaming: true })
 
       try {
         await streamAsk(
@@ -74,8 +78,8 @@ export function useStreamingAnswer(notebookId: string | undefined) {
               setState((prev) => ({ ...prev, grounded: found, citations })),
             onDelta: ({ text }) =>
               setState((prev) => ({ ...prev, answer: prev.answer + text })),
-            onDone: ({ answer, grounded }) => {
-              setState((prev) => ({ ...prev, answer, grounded, isStreaming: false }))
+            onDone: ({ queryId, answer, grounded }) => {
+              setState((prev) => ({ ...prev, answer, grounded, isStreaming: false, completedQueryId: queryId }))
               void queryClient.invalidateQueries({ queryKey: chatKeys.list(notebookId) })
             },
             onError: ({ message }) =>

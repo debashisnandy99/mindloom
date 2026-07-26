@@ -91,19 +91,6 @@ export const ADD_META: Record<SourceType, AddMeta> = {
   txt: { title: 'Paste text', sub: 'Notes, a transcript, an email thread — anything.', ph: 'Paste your text here…', textarea: true },
 }
 
-// ── Chat ────────────────────────────────────────────────────────────────────
-export const SUGGESTIONS = [
-  'Compare how my sources define the core idea',
-  'What are the key takeaways?',
-  'Which source explains this most simply?',
-  'Summarize the main argument in five bullets',
-  'Where do my sources disagree?',
-  'What should I focus on to understand this?',
-  'Build me a study plan from these sources',
-  'Explain the hardest concept simply',
-  'What is most important here?',
-]
-
 // ── Landing feature cards ───────────────────────────────────────────────────
 export interface Feature {
   d: string

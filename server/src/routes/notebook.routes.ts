@@ -2,6 +2,7 @@ import { Router } from "express";
 import { streamNotebookEvents } from "../controllers/events.controller.js";
 import * as notebookController from "../controllers/notebook.controller.js";
 import * as queryController from "../controllers/query.controller.js";
+import * as suggestionController from "../controllers/suggestion.controller.js";
 import * as toolGenerationController from "../controllers/toolGeneration.controller.js";
 import { loadNotebook } from "../middlewares/auth.middleware.js";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
@@ -35,6 +36,8 @@ router.delete("/:notebookId", csrfProtection, notebookController.destroy);
 router.get("/:notebookId/events", streamNotebookEvents);
 
 router.use("/:notebookId/sources", notebookSourceRouter);
+
+router.get("/:notebookId/suggestions", queryLimiter, suggestionController.suggest);
 
 router.get("/:notebookId/queries", queryController.listQueries);
 router.post(

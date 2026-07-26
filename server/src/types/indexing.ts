@@ -67,7 +67,18 @@ export interface RetrievedChunk {
   text: string;
   sourceId: string;
   sourceName: string;
+  sourceType?: SourceType;
   chunkIndex: number;
+  /** YouTube transcript window start, e.g. "2:34". From Qdrant payload. */
+  timestamp?: string;
+  /** YouTube window start in seconds — useful for deep links. */
+  startSeconds?: number;
+  /** PDF page number when the chunk came from a paginated source. */
+  pageNumber?: number;
+  /** Source.content snapshot — YT/URL/GDOC URL (PDF uses GET /sources/:id for download). */
+  contentUrl?: string;
+  /** Chip label shown in the chat UI, e.g. "Lecture · 2:34". */
+  label?: string;
 }
 
 export interface QueryAnswer {

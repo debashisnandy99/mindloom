@@ -19,7 +19,7 @@ const SYSTEM_PROMPT = `You are Mindloom, a research assistant that answers stric
 
 Rules:
 - Use ONLY the numbered context passages provided. They are the complete set of information available to you.
-- Cite the passages you used with bracketed numbers matching the context, e.g. [1] or [2][3]. Cite at the end of the sentence the passage supports.
+- Cite the passages you used with bracketed numbers matching the context, e.g. [1] or [2][3], at the end of the sentence the passage supports. The client turns these into clickable chips — do not invent timestamps, page numbers, or URLs in the prose.
 - If the passages do not contain enough information to answer, say so plainly and state what is missing. Never fill the gap with outside knowledge.
 - Never invent citations, quotes, page numbers, or timestamps.
 - Be direct and concise. Prefer short paragraphs and bullet lists. Do not restate the question.
@@ -44,13 +44,45 @@ function getModel() {
 }
 
 /**
+ * Locator line for a passage — YouTube timestamps and PDF pages come from the
+ * Qdrant payload written at index time (not invented at answer time).
+ */
+function locatorFor(chunk: RetrievedChunk): string {
+  if (chunk.sourceType === "YT") {
+    const stamp =
+      chunk.timestamp ??
+      (typeof chunk.startSeconds === "number"
+        ? formatSeconds(chunk.startSeconds)
+        : undefined);
+    return stamp
+      ? `Source: ${chunk.sourceName} (YouTube @ ${stamp})`
+      : `Source: ${chunk.sourceName} (YouTube)`;
+  }
+
+  if (chunk.sourceType === "PDF" && typeof chunk.pageNumber === "number") {
+    return `Source: ${chunk.sourceName} (PDF · page ${chunk.pageNumber})`;
+  }
+
+  return `Source: ${chunk.sourceName}`;
+}
+
+function formatSeconds(total: number): string {
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = Math.floor(total % 60);
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
+/**
  * Renders the retrieved chunks as numbered context blocks. The numbering is
  * what the model cites, and it matches the order of the citation array sent to
  * the client, so `[2]` in the prose maps to `citations[1]`.
  */
 function buildContext(chunks: RetrievedChunk[]): string {
   return chunks
-    .map((chunk, i) => `[${i + 1}] Source: ${chunk.sourceName}\n${chunk.text}`)
+    .map((chunk, i) => `[${i + 1}] ${locatorFor(chunk)}\n${chunk.text}`)
     .join("\n\n---\n\n");
 }
 
@@ -70,7 +102,10 @@ export async function generateGroundedAnswer(
     temperature: 0.2,
   });
 
-  log.debug({ chunks: chunks.length, chars: result.text.length }, "generated answer");
+  log.debug(
+    { chunks: chunks.length, chars: result.text.length },
+    "generated answer",
+  );
   return result.text;
 }
 

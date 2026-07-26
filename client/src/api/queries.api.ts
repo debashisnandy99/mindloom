@@ -69,3 +69,10 @@ export function streamAsk(
     },
   })
 }
+
+/** Fetch AI-generated suggestions for the notebook's sources. */
+export function fetchSuggestions(notebookId: string) {
+  return api
+    .get<{ suggestions: string[] }>(API_ENDPOINTS.queries.suggestions(notebookId))
+    .then((data) => data.suggestions)
+}
