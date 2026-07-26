@@ -1,5 +1,4 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import { MM_INITIAL_POS } from '../../data'
 import type { CenterView, Point } from '../../types'
 
 export interface LayoutState {
@@ -9,7 +8,6 @@ export interface LayoutState {
   par: Point
   playing: boolean
   progress: number
-  mmPos: Point[]
 }
 
 const initialState: LayoutState = {
@@ -19,7 +17,6 @@ const initialState: LayoutState = {
   par: { x: 0, y: 0 },
   playing: false,
   progress: 0,
-  mmPos: MM_INITIAL_POS,
 }
 
 export const layoutSlice = createSlice({
@@ -51,12 +48,6 @@ export const layoutSlice = createSlice({
       state.playing = false
       state.progress = 0
     },
-    moveNode(state, action: PayloadAction<{ index: number; x: number; y: number }>) {
-      const { index, x, y } = action.payload
-      if (state.mmPos[index]) {
-        state.mmPos[index] = { x, y }
-      }
-    },
   },
 })
 
@@ -69,7 +60,6 @@ export const {
   setPlaying,
   setProgress,
   resetAudio,
-  moveNode,
 } = layoutSlice.actions
 
 export default layoutSlice.reducer

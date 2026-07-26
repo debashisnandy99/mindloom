@@ -1,14 +1,18 @@
-import type { ChangeEvent, CSSProperties, KeyboardEvent } from 'react'
+import { useState, type ChangeEvent, type CSSProperties, type KeyboardEvent } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useCreateNotebook, useUpdateNotebook } from '../hooks/mutations/useNotebookMutations'
+import { useCreateSource, useUploadPdfSource } from '../hooks/mutations/useSourceMutations'
 import { useLogout } from '../hooks/mutations/useLogout'
 import { useSession } from '../hooks/queries/useSession'
 import { useMindloomNavigation } from '../hooks/useMindloomNavigation'
 import { ADD_META, ICONS } from '../data'
+import { UI_TO_SERVER_SOURCE } from '../lib/toolMappings'
+import type { CreateSourceInput } from '../api/types'
 import { useAppDispatch, useAppSelector } from '../store/reduxStore'
 import { closeProfile } from '../store/slices/appSlice'
 import { cancelNb, closeNbMenu, setNbDescDraft, setNbDraft } from '../store/slices/notebooksSlice'
 import { cancelAdd, setAddVal } from '../store/slices/sourcesSlice'
-import { confirmAdd, confirmNb } from '../store/thunks'
+import { showToast } from '../store/thunks'
 import { Icon } from './Icon'
 
 /** All screen-level overlays: toast, profile popover, add-source modal,
@@ -75,7 +79,7 @@ function ProfilePopover() {
     background: 'var(--grad)',
     boxShadow: 'var(--out)',
     padding: 16,
-    ...(pathname === '/workspace' ? { left: 24, bottom: 24 } : { right: 32, top: 76 }),
+    ...(pathname.startsWith('/workspace') ? { left: 24, bottom: 24 } : { right: 32, top: 76 }),
   }
   const rowBtn = {
     width: '100%',
@@ -165,29 +169,75 @@ const modalCard = {
 function AddSourceModal() {
   const dispatch = useAppDispatch()
   const addOpen = useAppSelector((s) => s.sources.addOpen)
+  const addNotebookId = useAppSelector((s) => s.sources.addNotebookId)
   const addVal = useAppSelector((s) => s.sources.addVal)
-  if (!addOpen) return null
+  const [file, setFile] = useState<File | null>(null)
+  const createSource = useCreateSource()
+  const uploadPdf = useUploadPdfSource()
+
+  if (!addOpen || !addNotebookId) return null
   const meta = ADD_META[addOpen]
   const ic = ICONS[addOpen]
+  const pending = createSource.isPending || uploadPdf.isPending
+
+  const close = () => {
+    setFile(null)
+    dispatch(cancelAdd())
+  }
 
   const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
-    if (f) dispatch(setAddVal(f.name))
+    if (f) {
+      setFile(f)
+      dispatch(setAddVal(f.name))
+    }
   }
+
+  const submit = () => {
+    if (pending) return
+    if (addOpen === 'pdf') {
+      if (!file) return
+      uploadPdf.mutate(
+        { notebookId: addNotebookId, file },
+        {
+          onSuccess: () => {
+            dispatch(showToast('PDF uploaded — indexing started'))
+            close()
+          },
+          onError: (err) => dispatch(showToast(err instanceof Error ? err.message : 'Upload failed')),
+        },
+      )
+      return
+    }
+    const content = addVal.trim()
+    if (!content) return
+    const input = { type: UI_TO_SERVER_SOURCE[addOpen], content } as CreateSourceInput
+    createSource.mutate(
+      { notebookId: addNotebookId, input },
+      {
+        onSuccess: () => {
+          dispatch(showToast('Source added — indexing started'))
+          close()
+        },
+        onError: (err) => dispatch(showToast(err instanceof Error ? err.message : 'Could not add source')),
+      },
+    )
+  }
+
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') dispatch(confirmAdd())
+    if (e.key === 'Enter') submit()
   }
 
   return (
     <>
-      <div onClick={() => dispatch(cancelAdd())} style={scrim} />
+      <div onClick={close} style={scrim} />
       <div style={{ ...modalCard, width: 440 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
           <div style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 12, boxShadow: 'var(--inSm)', display: 'grid', placeItems: 'center', color: 'var(--acc)' }}>
             <Icon d={ic.d} d2={ic.d2} size={17} sw={1.9} />
           </div>
           <div style={{ flex: 1, fontWeight: 800, fontSize: 17 }}>{meta.title}</div>
-          <CloseButton onClick={() => dispatch(cancelAdd())} />
+          <CloseButton onClick={close} />
         </div>
         <div style={{ fontSize: 13, color: 'var(--tx2)', marginBottom: 18 }}>{meta.sub}</div>
 
@@ -203,7 +253,7 @@ function AddSourceModal() {
               </span>
               <span style={{ fontWeight: 800, fontSize: 13.5 }}>{addVal || 'Choose a PDF'}</span>
               <span style={{ fontSize: 11, color: 'var(--tx2)', fontFamily: "'DM Mono',monospace" }}>
-                {addVal ? 'ready to add — indexing starts right after' : 'click to browse · up to 50 MB'}
+                {addVal ? 'ready to add — indexing starts right after' : 'click to browse · up to 25 MB'}
               </span>
             </label>
             <input id="ml-file" type="file" accept="application/pdf,.pdf" onChange={onFile} style={{ display: 'none' }} />
@@ -221,11 +271,11 @@ function AddSourceModal() {
         )}
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 18 }}>
-          <button onClick={() => dispatch(cancelAdd())} className="ml-press" style={cancelBtn}>
+          <button onClick={close} className="ml-press" style={cancelBtn}>
             Cancel
           </button>
-          <button onClick={() => dispatch(confirmAdd())} className="ml-press" style={confirmBtn}>
-            Add source
+          <button onClick={submit} disabled={pending} className="ml-press" style={confirmBtn}>
+            {pending ? 'Adding…' : 'Add source'}
           </button>
         </div>
         <div style={{ fontSize: 11, color: 'var(--tx2)', fontFamily: "'DM Mono',monospace", marginTop: 14, textAlign: 'center' }}>
@@ -239,12 +289,46 @@ function AddSourceModal() {
 function NotebookModal() {
   const dispatch = useAppDispatch()
   const nbModal = useAppSelector((s) => s.notebooks.nbModal)
+  const nbEditId = useAppSelector((s) => s.notebooks.nbEditId)
   const nbDraft = useAppSelector((s) => s.notebooks.nbDraft)
   const nbDescDraft = useAppSelector((s) => s.notebooks.nbDescDraft)
+  const createNotebook = useCreateNotebook()
+  const updateNotebook = useUpdateNotebook()
+
   if (!nbModal) return null
   const editing = nbModal === 'edit'
+  const pending = createNotebook.isPending || updateNotebook.isPending
+
+  const submit = () => {
+    if (pending) return
+    const name = nbDraft.trim()
+    const description = nbDescDraft.trim()
+    if (editing && nbEditId) {
+      updateNotebook.mutate(
+        { id: nbEditId, input: { name: name || undefined, description } },
+        {
+          onSuccess: () => {
+            dispatch(showToast('Notebook updated'))
+            dispatch(cancelNb())
+          },
+        },
+      )
+      return
+    }
+    if (!name) return
+    createNotebook.mutate(
+      { name, description },
+      {
+        onSuccess: () => {
+          dispatch(showToast('Notebook created'))
+          dispatch(cancelNb())
+        },
+      },
+    )
+  }
+
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') dispatch(confirmNb())
+    if (e.key === 'Enter') submit()
   }
   const fieldLabel = { fontFamily: "'DM Mono',monospace", fontSize: 10.5, letterSpacing: '1px', color: 'var(--tx2)', marginBottom: 7 } as const
 
@@ -274,8 +358,8 @@ function NotebookModal() {
           <button onClick={() => dispatch(cancelNb())} className="ml-press" style={cancelBtn}>
             Cancel
           </button>
-          <button onClick={() => dispatch(confirmNb())} className="ml-press" style={confirmBtn}>
-            {editing ? 'Save changes' : 'Create notebook'}
+          <button onClick={submit} disabled={pending} className="ml-press" style={confirmBtn}>
+            {pending ? 'Saving…' : editing ? 'Save changes' : 'Create notebook'}
           </button>
         </div>
       </div>

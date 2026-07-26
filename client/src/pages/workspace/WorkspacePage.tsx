@@ -1,14 +1,22 @@
 import { useRef, type PointerEvent } from 'react'
+import { Navigate, useParams } from 'react-router-dom'
+import { useNotebookEvents } from '../../hooks/events/useNotebookEvents'
 import { useAppDispatch, useAppSelector } from '../../store/reduxStore'
 import { setRightW } from '../../store/slices/layoutSlice'
 import { CenterPanel } from './components/CenterPanel'
 import { SidePanel } from './components/SidePanel'
 import { ToolRail } from './components/ToolRail'
+import { WorkspaceContext } from './WorkspaceContext'
 import './WorkspacePage.scss'
 
 export function WorkspacePage() {
+  const { notebookId } = useParams<{ notebookId: string }>()
   const dispatch = useAppDispatch()
   const rightW = useAppSelector((s) => s.layout.rightW)
+
+  // One SSE subscription for the whole workspace keeps source + tool caches
+  // live (indexing progress, generation progress) while this notebook is open.
+  useNotebookEvents(notebookId)
 
   const colDrag = useRef<{ x: number; w: number } | null>(null)
   const onColDown = (e: PointerEvent<HTMLDivElement>) => {
@@ -26,26 +34,30 @@ export function WorkspacePage() {
     colDrag.current = null
   }
 
+  if (!notebookId) return <Navigate to="/notebooks" replace />
+
   return (
-    <div
-      className="workspace-page"
-      style={{
-        gridTemplateColumns: `92px 1fr 10px ${rightW}px`,
-      }}
-    >
-      <ToolRail />
-      <CenterPanel />
+    <WorkspaceContext.Provider value={notebookId}>
       <div
-        onPointerDown={onColDown}
-        onPointerMove={onColMove}
-        onPointerUp={onColUp}
-        title="Drag to resize"
-        className="workspace-page__resizer ml-hov-accsoft"
+        className="workspace-page"
+        style={{
+          gridTemplateColumns: `92px 1fr 10px ${rightW}px`,
+        }}
       >
-        <span className="workspace-page__resizer-handle" />
+        <ToolRail />
+        <CenterPanel />
+        <div
+          onPointerDown={onColDown}
+          onPointerMove={onColMove}
+          onPointerUp={onColUp}
+          title="Drag to resize"
+          className="workspace-page__resizer ml-hov-accsoft"
+        >
+          <span className="workspace-page__resizer-handle" />
+        </div>
+        <SidePanel />
       </div>
-      <SidePanel />
-    </div>
+    </WorkspaceContext.Provider>
   )
 }
 

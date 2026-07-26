@@ -1,6 +1,17 @@
 import { api } from '../lib/apiClient'
+import { streamSse } from '../lib/streamClient'
 import { API_ENDPOINTS } from './endpoints'
-import type { AskInput, AskResult, ChatQuery, RetrievedChunk } from './types'
+import type {
+  AnswerDeltaEvent,
+  AnswerDoneEvent,
+  AnswerErrorEvent,
+  AnswerMetaEvent,
+  AnswerStreamHandlers,
+  AskInput,
+  AskResult,
+  ChatQuery,
+  RetrievedChunk,
+} from './types'
 
 export function listQueries(notebookId: string) {
   return api
@@ -22,4 +33,39 @@ export function searchChunks(notebookId: string, input: AskInput) {
 
 export function deleteQuery(notebookId: string, queryId: string) {
   return api.delete<void>(API_ENDPOINTS.queries.detail(notebookId, queryId))
+}
+
+/**
+ * Ask a question and receive the answer as it is generated.
+ *
+ * Frames arrive as `meta` (citations, whether anything was retrieved) → many
+ * `delta` (text) → `done`. Resolves when the stream closes; pass a `signal` to
+ * stop generation early.
+ */
+export function streamAsk(
+  notebookId: string,
+  input: AskInput,
+  handlers: AnswerStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamSse(API_ENDPOINTS.queries.askStream(notebookId), {
+    body: input,
+    signal,
+    onFrame: ({ event, data }) => {
+      switch (event) {
+        case 'meta':
+          handlers.onMeta?.(data as AnswerMetaEvent)
+          break
+        case 'delta':
+          handlers.onDelta?.(data as AnswerDeltaEvent)
+          break
+        case 'done':
+          handlers.onDone?.(data as AnswerDoneEvent)
+          break
+        case 'error':
+          handlers.onError?.(data as AnswerErrorEvent)
+          break
+      }
+    },
+  })
 }

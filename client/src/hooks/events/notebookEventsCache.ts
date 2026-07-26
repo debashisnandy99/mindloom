@@ -1,10 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query'
-import type {
-  IndexingProgressEvent,
-  IndexingSnapshotEvent,
-  Source,
+import {
+  TOOL_KIND_TO_NAME,
+  type IndexingProgressEvent,
+  type IndexingSnapshotEvent,
+  type Source,
+  type ToolGeneration,
+  type ToolGenerationEvent,
 } from '../../api/types'
-import { notebookKeys, sourceKeys } from '../../constants/queryKeys'
+import { notebookKeys, sourceKeys, toolKeys } from '../../constants/queryKeys'
 
 /**
  * Pure cache-sync helpers for notebook SSE events. Kept separate from the React
@@ -75,5 +78,57 @@ export function applyIndexingEvent(
   // needs its full record; either way, refetch to stay consistent.
   if (TERMINAL.includes(event.status) || !matched) {
     invalidateForTerminal(queryClient, event.notebookId, event.sourceId)
+  }
+}
+
+// ── Tool generation ─────────────────────────────────────────────────────────
+
+/** Merge one generation row into the cached status list. */
+function patchToolStatus(
+  queryClient: QueryClient,
+  notebookId: string,
+  row: ToolGeneration,
+): void {
+  queryClient.setQueryData<ToolGeneration[]>(toolKeys.status(notebookId), (current) => {
+    const next = (current ?? []).filter((g) => g.kind !== row.kind)
+    next.push(row)
+    return next
+  })
+}
+
+export function applyToolSnapshot(
+  queryClient: QueryClient,
+  snapshot: IndexingSnapshotEvent,
+): void {
+  if (!snapshot.tools?.length) return
+  for (const tool of snapshot.tools) {
+    patchToolStatus(queryClient, snapshot.notebookId, {
+      kind: tool.kind,
+      status: tool.status,
+      progress: tool.progress,
+      message: tool.message,
+      error: tool.error,
+    })
+  }
+}
+
+export function applyToolEvent(
+  queryClient: QueryClient,
+  event: ToolGenerationEvent,
+): void {
+  patchToolStatus(queryClient, event.notebookId, {
+    kind: event.kind,
+    status: event.status,
+    progress: event.progress,
+    message: event.message,
+    error: event.error,
+  })
+
+  // Once a tool finishes, refetch its artifact so the view shows fresh content.
+  if (event.status === 'READY') {
+    const toolName = TOOL_KIND_TO_NAME[event.kind]
+    void queryClient.invalidateQueries({
+      queryKey: toolKeys.tool(event.notebookId, toolName),
+    })
   }
 }

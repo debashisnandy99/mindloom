@@ -22,6 +22,7 @@ export const sourceKeys = {
 export const toolKeys = {
   all: ['tools'] as const,
   tool: (notebookId: string, tool: string) => [...toolKeys.all, notebookId, tool] as const,
+  status: (notebookId: string) => [...toolKeys.all, 'status', notebookId] as const,
 }
 
 export const chatKeys = {

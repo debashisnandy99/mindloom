@@ -1,4 +1,5 @@
 import { Redis, type RedisOptions } from "ioredis";
+import { createClient } from "redis";
 import { env } from "../env.js";
 import { childLogger } from "../utils/logger.js";
 
@@ -21,8 +22,21 @@ function create(name: string, options: RedisOptions = {}): Redis {
   return client;
 }
 
-/** Shared connection used for sessions and general commands. */
+/** Shared ioredis connection used for general commands. */
 export const redis = create("app");
+
+/**
+ * `connect-redis` v10 uses the node-redis command API, which differs from
+ * ioredis for commands such as SET with an expiry. Keep this client dedicated
+ * to sessions while BullMQ and pub/sub continue using ioredis connections.
+ */
+export const sessionRedis = createClient({ url: env.REDIS_URL });
+sessionRedis.on("error", (err) => log.error({ err, client: "session" }, "redis error"));
+sessionRedis.on("connect", () => log.debug({ client: "session" }, "redis connected"));
+
+export async function connectRedis(): Promise<void> {
+  if (!sessionRedis.isOpen) await sessionRedis.connect();
+}
 
 /** Connection factory for BullMQ queues and workers. */
 export function createQueueConnection(name: string): Redis {
@@ -42,5 +56,8 @@ export function createPublisher(name: string): Redis {
 }
 
 export async function disconnectRedis(): Promise<void> {
-  await redis.quit().catch(() => redis.disconnect());
+  await Promise.all([
+    redis.quit().catch(() => redis.disconnect()),
+    sessionRedis.isOpen ? sessionRedis.close().catch(() => sessionRedis.disconnect()) : undefined,
+  ]);
 }

@@ -1,9 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { API_ENDPOINTS } from '../../api/endpoints'
-import type { IndexingProgressEvent, IndexingSnapshotEvent } from '../../api/types'
+import type {
+  IndexingProgressEvent,
+  IndexingSnapshotEvent,
+  ToolGenerationEvent,
+} from '../../api/types'
 import { subscribeToSse } from '../../lib/sseClient'
-import { applyIndexingEvent, applyIndexingSnapshot } from './notebookEventsCache'
+import {
+  applyIndexingEvent,
+  applyIndexingSnapshot,
+  applyToolEvent,
+  applyToolSnapshot,
+} from './notebookEventsCache'
 
 export interface UseNotebookEventsOptions {
   /** Skip the subscription (e.g. before a notebook is selected). */
@@ -54,12 +63,16 @@ export function useNotebookEvents(
           connected: () => setConnected(true),
           snapshot: (data) => {
             applyIndexingSnapshot(queryClient, data as IndexingSnapshotEvent)
+            applyToolSnapshot(queryClient, data as IndexingSnapshotEvent)
           },
           indexing: (data) => {
             const event = data as IndexingProgressEvent
             applyIndexingEvent(queryClient, event)
             setProgress((prev) => ({ ...prev, [event.sourceId]: event }))
             onProgressRef.current?.(event)
+          },
+          tool: (data) => {
+            applyToolEvent(queryClient, data as ToolGenerationEvent)
           },
         },
       },

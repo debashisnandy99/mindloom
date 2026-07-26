@@ -73,4 +73,28 @@ export interface RetrievedChunk {
 export interface QueryAnswer {
   answer: string;
   citations: RetrievedChunk[];
+  /** False when retrieval found nothing relevant, so no model was consulted. */
+  grounded: boolean;
+}
+
+/**
+ * Output of the pre-retrieval rewrite step. Both variants are internal: they
+ * widen recall against the vector store and are never shown to the user.
+ */
+export interface RewrittenQuery {
+  /** The user's original wording, kept verbatim. */
+  original: string;
+  /** Same intent, phrased the way a source document would state it. */
+  rephrased: string;
+  /** A broader "step back" question about the underlying concept. */
+  stepBack: string;
+}
+
+/** Retrieval outcome, before any generation happens. */
+export interface RetrievalResult {
+  chunks: RetrievedChunk[];
+  /** True when at least one chunk cleared the relevance threshold. */
+  found: boolean;
+  /** The rewrite that produced these chunks — logged, never sent to clients. */
+  rewrite: RewrittenQuery;
 }

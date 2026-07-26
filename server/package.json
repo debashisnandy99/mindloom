@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "nodemon",
     "dev:worker": "nodemon --config nodemon.worker.json",
+    "dev:all": "bun run --parallel dev dev:worker",
     "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "start:worker": "node dist/workers/indexing.worker.js",
@@ -17,6 +18,8 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.20",
+    "@ai-sdk/xai": "^4.0.18",
     "@aws-sdk/client-s3": "^3.1095.0",
     "@aws-sdk/s3-request-presigner": "^3.1095.0",
     "@langchain/textsplitters": "^1.0.1",
@@ -47,6 +50,8 @@
     "pdf-parse": "^2.4.5",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "redis": "^6.1.0",
+    "winston": "^3.19.0",
     "youtube-transcript": "^1.3.1",
     "zod": "^4.4.3"
   },

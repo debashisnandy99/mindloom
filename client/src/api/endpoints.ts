@@ -32,10 +32,14 @@ export const API_ENDPOINTS = {
     summary: (notebookId: string) => `/notebooks/${notebookId}/summary`,
     audioOverview: (notebookId: string) => `/notebooks/${notebookId}/audio-overview`,
     timeline: (notebookId: string) => `/notebooks/${notebookId}/timeline`,
+    status: (notebookId: string) => `/notebooks/${notebookId}/tools/status`,
+    generate: (notebookId: string) => `/notebooks/${notebookId}/tools/generate`,
   },
   queries: {
     list: (notebookId: string) => `/notebooks/${notebookId}/queries`,
     ask: (notebookId: string) => `/notebooks/${notebookId}/query`,
+    /** SSE stream framed over a POST body, so it is read with `fetch`. */
+    askStream: (notebookId: string) => `/notebooks/${notebookId}/query/stream`,
     search: (notebookId: string) => `/notebooks/${notebookId}/search`,
     detail: (notebookId: string, queryId: string) =>
       `/notebooks/${notebookId}/queries/${queryId}`,

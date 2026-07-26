@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAppDispatch } from '../store/reduxStore'
 import { closeProfile, setAuthMode } from '../store/slices/appSlice'
 import { resetNbUi } from '../store/slices/notebooksSlice'
-import { openNb, signOut } from '../store/thunks'
+import { signOut } from '../store/thunks'
 
 /** URL navigation with the UI-state cleanup required by each route transition. */
 export function useMindloomNavigation() {
@@ -31,9 +31,9 @@ export function useMindloomNavigation() {
   }, [dispatch, navigate])
 
   const openNotebook = useCallback(
-    (id: number) => {
-      dispatch(openNb(id))
-      navigate('/workspace')
+    (id: string) => {
+      dispatch(resetNbUi())
+      navigate(`/workspace/${id}`)
     },
     [dispatch, navigate],
   )

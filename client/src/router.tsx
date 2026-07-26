@@ -31,7 +31,7 @@ export const router = createBrowserRouter([
             lazy: () => import('./pages/notebooks/NotebooksPage.tsx'),
           },
           {
-            path: 'workspace',
+            path: 'workspace/:notebookId',
             lazy: () => import('./pages/workspace/WorkspacePage.tsx'),
           },
         ],

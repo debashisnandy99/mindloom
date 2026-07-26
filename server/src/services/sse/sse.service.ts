@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import type { Redis } from "ioredis";
 import { createPublisher, createSubscriber } from "../../config/redis.js";
+import type { ToolGenerationEvent } from "../../types/generation.js";
 import type { IndexingProgressEvent } from "../../types/indexing.js";
 import { childLogger } from "../../utils/logger.js";
 
@@ -9,17 +10,34 @@ const log = childLogger("sse");
 const CHANNEL_PREFIX = "indexing:notebook:";
 const HEARTBEAT_MS = 30_000;
 
+/**
+ * A single Redis pub/sub channel per notebook carries both indexing and tool
+ * generation updates. The envelope's `type` tells the subscriber which SSE
+ * event name to emit so the client can route them independently.
+ */
+type NotebookMessage =
+  | { type: "indexing"; event: IndexingProgressEvent }
+  | { type: "tool"; event: ToolGenerationEvent };
+
 export function notebookChannel(notebookId: string): string {
   return `${CHANNEL_PREFIX}${notebookId}`;
 }
 
-// ── Publisher side (used by the worker process) ───────────────────────────
+// ── Publisher side (used by the worker processes) ─────────────────────────
 
 let publisher: Redis | undefined;
 
+function publish(notebookId: string, message: NotebookMessage): Promise<number> {
+  publisher ??= createPublisher("notebook");
+  return publisher.publish(notebookChannel(notebookId), JSON.stringify(message));
+}
+
 export async function publishIndexingEvent(event: IndexingProgressEvent): Promise<void> {
-  publisher ??= createPublisher("indexing");
-  await publisher.publish(notebookChannel(event.notebookId), JSON.stringify(event));
+  await publish(event.notebookId, { type: "indexing", event });
+}
+
+export async function publishToolEvent(event: ToolGenerationEvent): Promise<void> {
+  await publish(event.notebookId, { type: "tool", event });
 }
 
 export async function closePublisher(): Promise<void> {
@@ -53,15 +71,16 @@ function ensureSubscriber(): Redis {
     const clients = clientsByNotebook.get(notebookId);
     if (!clients?.size) return;
 
-    let event: IndexingProgressEvent;
+    let message: NotebookMessage;
     try {
-      event = JSON.parse(payload) as IndexingProgressEvent;
+      message = JSON.parse(payload) as NotebookMessage;
     } catch (err) {
-      log.warn({ err, channel }, "dropped malformed indexing event");
+      log.warn({ err, channel }, "dropped malformed notebook event");
       return;
     }
 
-    for (const client of clients) write(client.res, "indexing", event);
+    // The envelope's `type` doubles as the SSE event name.
+    for (const client of clients) write(client.res, message.type, message.event);
   });
 
   heartbeat = setInterval(() => {

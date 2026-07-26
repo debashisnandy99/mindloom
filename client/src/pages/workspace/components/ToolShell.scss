@@ -1,0 +1,84 @@
+.tool-shell {
+  &--center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 12px;
+    padding: 40px 32px;
+  }
+
+  &__title {
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--tx);
+
+    &--error {
+      color: var(--red);
+    }
+  }
+
+  &__message {
+    font-size: 13px;
+    color: var(--tx2);
+    max-width: 340px;
+    line-height: 1.5;
+  }
+
+  &__bar {
+    width: min(320px, 80%);
+    height: 8px;
+    border-radius: 999px;
+    box-shadow: var(--in);
+    overflow: hidden;
+    margin-top: 4px;
+  }
+
+  &__bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accGrad);
+    transition: width 0.4s ease;
+  }
+
+  &__pct {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--acc);
+  }
+
+  &__spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 3px solid var(--sd);
+    border-top-color: var(--acc);
+    animation: mlSpin 0.8s linear infinite;
+  }
+
+  &__btn {
+    margin-top: 6px;
+    border: none;
+    background: var(--accGrad);
+    color: var(--accTx);
+    box-shadow: var(--outSm);
+    border-radius: 999px;
+    padding: 11px 22px;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 800;
+    font-size: 13.5px;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+  }
+}
+
+@keyframes mlSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

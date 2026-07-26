@@ -199,6 +199,60 @@ export interface ToolArtifactMap {
 }
 export type ToolName = keyof ToolArtifactMap
 
+// ── Tool generation (LLM, async via BullMQ) ─────────────────────────────────
+
+/** Server enum for the six LLM-generated tools (audio overview excluded). */
+export type ToolKind =
+  | 'MINDMAP'
+  | 'QUIZ'
+  | 'CONCEPT_TABLE'
+  | 'FLASHCARDS'
+  | 'SUMMARY'
+  | 'TIMELINE'
+
+export type GenerationStatus = 'IDLE' | 'QUEUED' | 'PROCESSING' | 'READY' | 'FAILED'
+
+/** Which tool names are LLM-generated, and their server enum value. */
+export const GENERATED_TOOLS = {
+  mindmap: 'MINDMAP',
+  quiz: 'QUIZ',
+  conceptTable: 'CONCEPT_TABLE',
+  flashcards: 'FLASHCARDS',
+  summary: 'SUMMARY',
+  timeline: 'TIMELINE',
+} as const satisfies Partial<Record<ToolName, ToolKind>>
+
+export type GeneratedToolName = keyof typeof GENERATED_TOOLS
+
+/** Reverse map, server enum → tool name, for routing SSE events to the cache. */
+export const TOOL_KIND_TO_NAME: Record<ToolKind, GeneratedToolName> = {
+  MINDMAP: 'mindmap',
+  QUIZ: 'quiz',
+  CONCEPT_TABLE: 'conceptTable',
+  FLASHCARDS: 'flashcards',
+  SUMMARY: 'summary',
+  TIMELINE: 'timeline',
+}
+
+export interface ToolGeneration {
+  kind: ToolKind
+  status: GenerationStatus
+  progress: number
+  message?: string
+  error?: string | null
+}
+
+/** Payload of the `tool` SSE event. */
+export interface ToolGenerationEvent {
+  notebookId: string
+  kind: ToolKind
+  status: GenerationStatus
+  progress: number
+  message?: string
+  error?: string
+  at: string
+}
+
 // ── Chat / retrieval ────────────────────────────────────────────────────────
 
 export interface QueryToSource {
@@ -233,12 +287,45 @@ export interface AskResult {
   query: ChatQuery
   answer: string
   citations: RetrievedChunk[]
+  /** False when nothing relevant was retrieved, so no model was consulted. */
+  grounded: boolean
 }
 
 export interface AskInput {
   query: string
   sourceIds?: string[]
   topK?: number
+}
+
+// ── Streaming answers ───────────────────────────────────────────────────────
+
+/** Sent once, before any text: what the answer will be grounded in. */
+export interface AnswerMetaEvent {
+  found: boolean
+  citations: RetrievedChunk[]
+}
+
+/** One text fragment of the answer. */
+export interface AnswerDeltaEvent {
+  text: string
+}
+
+/** Sent once the answer is complete and persisted. */
+export interface AnswerDoneEvent {
+  queryId: string
+  answer: string
+  grounded: boolean
+}
+
+export interface AnswerErrorEvent {
+  message: string
+}
+
+export interface AnswerStreamHandlers {
+  onMeta?: (event: AnswerMetaEvent) => void
+  onDelta?: (event: AnswerDeltaEvent) => void
+  onDone?: (event: AnswerDoneEvent) => void
+  onError?: (event: AnswerErrorEvent) => void
 }
 
 // ── Server-Sent Events ──────────────────────────────────────────────────────
@@ -274,6 +361,13 @@ export interface IndexingSnapshotEvent {
     status: ServerSourceStatus
     chunkCount: number | null
     error: string | null
+  }>
+  tools?: Array<{
+    kind: ToolKind
+    status: GenerationStatus
+    progress: number
+    message?: string
+    error?: string | null
   }>
 }
 

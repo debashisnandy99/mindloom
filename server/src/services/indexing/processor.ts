@@ -7,6 +7,7 @@ import type {
   IndexingStage,
 } from "../../types/indexing.js";
 import { childLogger } from "../../utils/logger.js";
+import { regenerateNotebookTools } from "../generation/regenerate.js";
 import { publishIndexingEvent } from "../sse/sse.service.js";
 import { chunkDocument } from "./chunker.js";
 import { embedTexts } from "./embedder.js";
@@ -115,6 +116,12 @@ export async function processIndexingJob(data: IndexingJobData): Promise<void> {
       chunkCount: chunks.length,
     });
     log.info({ sourceId, chunks: chunks.length }, "indexed source");
+
+    // Fresh content: regenerate every study tool for the notebook. Coalesced
+    // per tool, so several sources finishing together produce one job each.
+    await regenerateNotebookTools(notebookId, data.userId).catch((err) =>
+      log.warn({ err, notebookId }, "failed to queue tool regeneration"),
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown indexing error";
     log.error({ err, sourceId }, "indexing failed");

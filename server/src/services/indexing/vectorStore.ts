@@ -90,6 +90,52 @@ export async function tryDeleteSourceVectors(
   }
 }
 
+/**
+ * Pages through a notebook's collection and returns chunk texts, newest points
+ * first is not guaranteed — order is Qdrant's. Used to assemble the corpus for
+ * tool generation. Caps the total to avoid loading an unbounded notebook.
+ */
+export async function scrollChunks(
+  notebookId: string,
+  maxChunks = 400,
+  sourceIds?: string[],
+): Promise<Array<{ sourceId: string; sourceName: string; text: string }>> {
+  const name = collectionName(notebookId);
+  const exists = await qdrant.collectionExists(name);
+  if (!exists.exists) return [];
+
+  const out: Array<{ sourceId: string; sourceName: string; text: string }> = [];
+  // Qdrant returns the id of the next point to resume from (string | number).
+  let offset: string | number | undefined;
+
+  while (out.length < maxChunks) {
+    const page = await qdrant.scroll(name, {
+      limit: Math.min(128, maxChunks - out.length),
+      with_payload: true,
+      with_vector: false,
+      offset,
+      filter: sourceIds?.length
+        ? { must: [{ key: "sourceId", match: { any: sourceIds } }] }
+        : undefined,
+    });
+
+    for (const point of page.points) {
+      const payload = (point.payload ?? {}) as Partial<ChunkMetadata>;
+      out.push({
+        sourceId: payload.sourceId ?? "",
+        sourceName: payload.sourceName ?? "",
+        text: payload.text ?? "",
+      });
+    }
+
+    const next = page.next_page_offset;
+    if (typeof next !== "string" && typeof next !== "number") break;
+    offset = next;
+  }
+
+  return out;
+}
+
 export async function searchChunks(
   notebookId: string,
   vector: number[],
