@@ -33,4 +33,11 @@ export const API_ENDPOINTS = {
     audioOverview: (notebookId: string) => `/notebooks/${notebookId}/audio-overview`,
     timeline: (notebookId: string) => `/notebooks/${notebookId}/timeline`,
   },
+  queries: {
+    list: (notebookId: string) => `/notebooks/${notebookId}/queries`,
+    ask: (notebookId: string) => `/notebooks/${notebookId}/query`,
+    search: (notebookId: string) => `/notebooks/${notebookId}/search`,
+    detail: (notebookId: string, queryId: string) =>
+      `/notebooks/${notebookId}/queries/${queryId}`,
+  },
 } as const

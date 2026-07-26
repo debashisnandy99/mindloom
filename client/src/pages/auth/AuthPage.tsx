@@ -1,39 +1,39 @@
-import { useEffect, type MouseEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import type { OAuthProvider } from '../../api/auth.api'
-import { Icon } from '../../components/Icon'
-import { useMindloomNavigation } from '../../hooks/useMindloomNavigation'
-import { useOAuthSignIn } from '../../hooks/mutations/useOAuthSignIn'
-import { useSession } from '../../hooks/queries/useSession'
-import { useAppDispatch, useAppSelector } from '../../store/reduxStore'
-import { toggleAuthMode } from '../../store/slices/appSlice'
-import './AuthPage.scss'
+import { useEffect, type MouseEvent } from "react";
+import { useSearchParams } from "react-router-dom";
+import type { OAuthProvider } from "../../api/auth.api";
+import { Icon } from "../../components/Icon";
+import { useMindloomNavigation } from "../../hooks/useMindloomNavigation";
+import { useOAuthSignIn } from "../../hooks/mutations/useOAuthSignIn";
+import { useSession } from "../../hooks/queries/useSession";
+import { useAppDispatch, useAppSelector } from "../../store/reduxStore";
+import { toggleAuthMode } from "../../store/slices/appSlice";
+import "./AuthPage.scss";
 
 const OAUTH_ERRORS: Record<string, string> = {
-  oauth_failed: 'We could not complete that sign-in. Please try again.',
-}
+  oauth_failed: "We could not complete that sign-in. Please try again.",
+};
 
 export function AuthPage() {
-  const dispatch = useAppDispatch()
-  const authMode = useAppSelector((s) => s.app.authMode)
-  const { enterApp, goLanding } = useMindloomNavigation()
-  const { isAuthenticated, isLoading } = useSession()
-  const signInWith = useOAuthSignIn()
-  const [searchParams] = useSearchParams()
+  const dispatch = useAppDispatch();
+  const authMode = useAppSelector((s) => s.app.authMode);
+  const { enterApp, goLanding } = useMindloomNavigation();
+  const { isAuthenticated, isLoading } = useSession();
+  const signInWith = useOAuthSignIn();
+  const [searchParams] = useSearchParams();
 
-  const signin = authMode === 'signin'
-  const errorMessage = OAUTH_ERRORS[searchParams.get('error') ?? '']
+  const signin = authMode === "signin";
+  const errorMessage = OAUTH_ERRORS[searchParams.get("error") ?? ""];
 
   // Landing here with a live session (e.g. via the back button) should not
   // strand the user on the sign-in screen.
   useEffect(() => {
-    if (isAuthenticated) enterApp()
-  }, [isAuthenticated, enterApp])
+    if (isAuthenticated) enterApp();
+  }, [isAuthenticated, enterApp]);
 
   const onSwitch = (e: MouseEvent) => {
-    e.preventDefault()
-    dispatch(toggleAuthMode())
-  }
+    e.preventDefault();
+    dispatch(toggleAuthMode());
+  };
 
   return (
     <div className="auth-page">
@@ -44,10 +44,12 @@ export function AuthPage() {
           </div>
           <div className="auth-page__title-group">
             <div className="auth-page__title">
-              {signin ? 'Sign in to Mindloom' : 'Create your Mindloom account'}
+              {signin ? "Sign in to Mindloom" : "Create your Mindloom account"}
             </div>
             <div className="auth-page__subtitle">
-              {signin ? 'Welcome back — your notebooks are waiting.' : 'Free for students and researchers. No card needed.'}
+              {signin
+                ? "Welcome back — your notebooks are waiting."
+                : "Free for students and researchers. No card needed."}
             </div>
           </div>
         </div>
@@ -85,30 +87,26 @@ export function AuthPage() {
           <div className="auth-page__divider-line" />
         </div>
 
-        <div className="auth-page__form">
-          <input placeholder="Email address" className="auth-page__input" disabled />
-          <input placeholder="Password" type="password" className="auth-page__input" disabled />
-          <button type="button" className="auth-page__submit" disabled>
-            {signin ? 'Continue' : 'Sign up'}
-          </button>
-          <div className="auth-page__form-note">
-            Email sign-in is coming soon — use Google or GitHub for now.
-          </div>
-        </div>
-
         <div className="auth-page__switch">
-          {signin ? "Don't have an account?" : 'Already have an account?'}{' '}
+          {signin ? "Don't have an account?" : "Already have an account?"}{" "}
           <a href="#" onClick={onSwitch}>
-            {signin ? 'Sign up' : 'Sign in'}
+            {signin ? "Sign up" : "Sign in"}
           </a>
         </div>
       </div>
 
-      <a href="#" onClick={(e) => { e.preventDefault(); goLanding() }} className="auth-page__back-link">
+      <a
+        href="#"
+        onClick={(e) => {
+          e.preventDefault();
+          goLanding();
+        }}
+        className="auth-page__back-link"
+      >
         ← Back to mindloom.app
       </a>
     </div>
-  )
+  );
 }
 
 function OAuthButton({
@@ -119,12 +117,12 @@ function OAuthButton({
   onClick,
   children,
 }: {
-  badge: string
-  badgeSize: number
-  provider: OAuthProvider
-  disabled?: boolean
-  onClick: (provider: OAuthProvider) => void
-  children: string
+  badge: string;
+  badgeSize: number;
+  provider: OAuthProvider;
+  disabled?: boolean;
+  onClick: (provider: OAuthProvider) => void;
+  children: string;
 }) {
   return (
     <button
@@ -141,7 +139,7 @@ function OAuthButton({
       </span>
       {children}
     </button>
-  )
+  );
 }
 
-export { AuthPage as Component }
+export { AuthPage as Component };

@@ -41,18 +41,36 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
   isFormData?: boolean
 }
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function isMutation(method?: string): boolean {
+  return !SAFE_METHODS.has((method ?? 'GET').toUpperCase())
+}
+
 /**
  * Thin fetch wrapper. `credentials: 'include'` is what carries the session
  * cookie, and it is required on every call for the stateful API to work.
+ *
+ * State-changing requests additionally carry the double-submit CSRF token when
+ * the server has CSRF enabled; when it is disabled the token is `null` and no
+ * header is added. Imported lazily to keep this module dependency-free at load.
  */
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, isFormData, headers, ...rest } = options
+
+  const csrfHeader: Record<string, string> = {}
+  if (isMutation(rest.method)) {
+    const { getCsrfToken } = await import('./csrf')
+    const token = await getCsrfToken()
+    if (token) csrfHeader['X-CSRF-Token'] = token
+  }
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...rest,
     credentials: 'include',
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...csrfHeader,
       ...headers,
     },
     body: isFormData ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
@@ -67,6 +85,11 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (!response.ok || !payload || payload.success === false) {
     const failure = payload as ApiFailure | null
+    // A rejected/stale CSRF token should be dropped so the next write re-fetches.
+    if (response.status === 403 && isMutation(rest.method)) {
+      const { resetCsrfToken } = await import('./csrf')
+      resetCsrfToken()
+    }
     throw new ApiError(
       response.status,
       failure?.message ?? `Request failed with status ${response.status}`,
