@@ -46,15 +46,20 @@ pipeline {
 
     // Fast feedback before building images. Runs the Bun toolchain in a
     // throwaway container over this workspace (no Docker Pipeline plugin needed).
+    // The production env is passed in via --env-file so anything env-dependent
+    // (e.g. `prisma generate` reading prisma.config.ts) has what it needs.
     stage('Lint & Typecheck') {
       steps {
-        sh '''
-          docker run --rm \
-            -u "$(id -u):$(id -g)" -e HOME=/tmp \
-            -v "$PWD":/app -w /app \
-            oven/bun:1 \
-            sh -c "bun install --frozen-lockfile && bun run lint && bun run typecheck"
-        '''
+        withCredentials([file(credentialsId: 'mindloom-server-env', variable: 'SERVER_ENV_FILE')]) {
+          sh '''
+            docker run --rm \
+              -u "$(id -u):$(id -g)" -e HOME=/tmp \
+              --env-file "$SERVER_ENV_FILE" \
+              -v "$PWD":/app -w /app \
+              oven/bun:1 \
+              sh -c "bun install --frozen-lockfile && bun run lint && bun run typecheck"
+          '''
+        }
       }
     }
 
