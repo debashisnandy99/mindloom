@@ -60,6 +60,10 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    volumes:
+      # Persist winston file logs (incl. file-only s3/exception logs) across
+      # deploys and expose them on the host: sudo tail -f /var/log/mindloom/server/*.log
+      - /var/log/mindloom/server:/app/server/logs
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:3000/health || exit 1"]
       interval: 30s
@@ -82,6 +86,10 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    volumes:
+      # Separate host dir from the API so the two processes never write the same
+      # files: sudo tail -f /var/log/mindloom/worker/bullmq-error.log
+      - /var/log/mindloom/worker:/app/server/logs
 
   client:
     image: mindloom-client:${IMAGE_TAG:-latest}
@@ -91,6 +99,21 @@ services:
       - "127.0.0.1:${CLIENT_PORT:-8180}:80"
     depends_on:
       - server
+
+  # Web log viewer, served behind nginx at /logs (with basic auth).
+  # Loopback-only, scoped to just the mindloom-* containers, socket read-only.
+  dozzle:
+    image: amir20/dozzle:v8
+    container_name: mindloom-dozzle
+    restart: unless-stopped
+    environment:
+      DOZZLE_BASE: /logs
+      DOZZLE_FILTER: "name=mindloom-"
+      DOZZLE_NO_ANALYTICS: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:${DOZZLE_PORT:-8280}:8080"
 
 volumes:
   redis_data:

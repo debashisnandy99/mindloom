@@ -1,6 +1,6 @@
-import { api } from '../lib/apiClient'
-import { streamSse } from '../lib/streamClient'
-import { API_ENDPOINTS } from './endpoints'
+import { api } from "../lib/apiClient";
+import { streamSse } from "../lib/streamClient";
+import { API_ENDPOINTS } from "./endpoints";
 import type {
   AnswerDeltaEvent,
   AnswerDoneEvent,
@@ -11,28 +11,31 @@ import type {
   AskResult,
   ChatQuery,
   RetrievedChunk,
-} from './types'
+} from "./types";
 
 export function listQueries(notebookId: string) {
   return api
     .get<{ queries: ChatQuery[] }>(API_ENDPOINTS.queries.list(notebookId))
-    .then((data) => data.queries)
+    .then((data) => data.queries);
 }
 
 /** Ask a question: the server persists it and returns the (RAG) answer. */
 export function askQuery(notebookId: string, input: AskInput) {
-  return api.post<AskResult>(API_ENDPOINTS.queries.ask(notebookId), input)
+  return api.post<AskResult>(API_ENDPOINTS.queries.ask(notebookId), input);
 }
 
 /** Raw chunk retrieval without persisting a query. */
 export function searchChunks(notebookId: string, input: AskInput) {
   return api
-    .post<{ chunks: RetrievedChunk[] }>(API_ENDPOINTS.queries.search(notebookId), input)
-    .then((data) => data.chunks)
+    .post<{ chunks: RetrievedChunk[] }>(
+      API_ENDPOINTS.queries.search(notebookId),
+      input,
+    )
+    .then((data) => data.chunks);
 }
 
 export function deleteQuery(notebookId: string, queryId: string) {
-  return api.delete<void>(API_ENDPOINTS.queries.detail(notebookId, queryId))
+  return api.delete<void>(API_ENDPOINTS.queries.detail(notebookId, queryId));
 }
 
 /**
@@ -53,26 +56,33 @@ export function streamAsk(
     signal,
     onFrame: ({ event, data }) => {
       switch (event) {
-        case 'meta':
-          handlers.onMeta?.(data as AnswerMetaEvent)
-          break
-        case 'delta':
-          handlers.onDelta?.(data as AnswerDeltaEvent)
-          break
-        case 'done':
-          handlers.onDone?.(data as AnswerDoneEvent)
-          break
-        case 'error':
-          handlers.onError?.(data as AnswerErrorEvent)
-          break
+        case "meta":
+          handlers.onMeta?.(data as AnswerMetaEvent);
+          break;
+        case "delta":
+          handlers.onDelta?.(data as AnswerDeltaEvent);
+          break;
+        case "done":
+          handlers.onDone?.(data as AnswerDoneEvent);
+          break;
+        case "error":
+          handlers.onError?.(data as AnswerErrorEvent);
+          break;
       }
     },
-  })
+  });
 }
 
-/** Fetch AI-generated suggestions for the notebook's sources. */
-export function fetchSuggestions(notebookId: string) {
+/**
+ * Fetch AI-generated suggestions for the notebook's sources. Pass `exclude`
+ * (the suggestions currently on screen) so a refresh returns a different set.
+ */
+export function fetchSuggestions(notebookId: string, exclude: string[] = []) {
+  const path = API_ENDPOINTS.queries.suggestions(notebookId);
+  const url = exclude.length
+    ? `${path}?exclude=${encodeURIComponent(exclude.join("\n"))}`
+    : path;
   return api
-    .get<{ suggestions: string[] }>(API_ENDPOINTS.queries.suggestions(notebookId))
-    .then((data) => data.suggestions)
+    .get<{ suggestions: string[] }>(url)
+    .then((data) => data.suggestions);
 }

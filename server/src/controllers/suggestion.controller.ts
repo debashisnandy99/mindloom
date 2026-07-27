@@ -44,9 +44,20 @@ function getModel() {
   return provider(env.XAI_MODEL);
 }
 
+/** In-place Fisher–Yates shuffle; returns the same array for chaining. */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 /**
  * Pulls indexed chunks from Qdrant and packs them into a prompt-sized corpus.
  * Sampling across sources first keeps one long PDF from crowding out the rest.
+ * Source and chunk order are shuffled each call so repeated requests surface
+ * different excerpts — and therefore different suggestions.
  */
 async function buildCorpusFromQdrant(notebookId: string): Promise<string> {
   const chunks = await scrollChunks(notebookId);
@@ -61,7 +72,8 @@ async function buildCorpusFromQdrant(notebookId: string): Promise<string> {
     bySource.set(key, list);
   }
 
-  const queues = [...bySource.values()];
+  // Shuffle the per-source queues and their order for variety across calls.
+  const queues = shuffle([...bySource.values()].map((q) => shuffle(q)));
   let out = "";
   let progressed = true;
 
@@ -82,14 +94,30 @@ async function buildCorpusFromQdrant(notebookId: string): Promise<string> {
   return out.trim();
 }
 
-function buildPrompt(corpus: string): string {
-  return `Here are excerpts from the student's indexed notebook sources:\n\n${corpus}\n\nGenerate 6 suggested questions a student might ask to study this material.`;
+function buildPrompt(corpus: string, exclude: string[]): string {
+  const avoid = exclude.length
+    ? `\n\nThe student has already been shown the questions below. Do NOT repeat or paraphrase any of them — produce a fresh, different set:\n${exclude.map((q) => `- ${q}`).join("\n")}`
+    : "";
+  return `Here are excerpts from the student's indexed notebook sources:\n\n${corpus}\n\nGenerate 6 suggested questions a student might ask to study this material.${avoid}`;
+}
+
+/** Previously-shown suggestions the client asks us to avoid, newline-separated. */
+function parseExclude(raw: unknown): string[] {
+  if (typeof raw !== "string") return [];
+  return raw
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 12);
 }
 
 function parseSuggestions(text: string): string[] | null {
   try {
     // Strip any accidental markdown fences the model may add.
-    const cleaned = text.replace(/```json\s*/g, "").replace(/```/g, "").trim();
+    const cleaned = text
+      .replace(/```json\s*/g, "")
+      .replace(/```/g, "")
+      .trim();
     const parsed = JSON.parse(cleaned);
     if (Array.isArray(parsed) && parsed.every((s) => typeof s === "string")) {
       return parsed.slice(0, 6);
@@ -102,22 +130,34 @@ function parseSuggestions(text: string): string[] | null {
 
 export const suggest = asyncHandler(async (req, res) => {
   const notebookId = req.notebook!.id;
+  const exclude = parseExclude(req.query.exclude);
+
+  // Generic fallbacks (used only once there IS indexed data but generation is
+  // unavailable), minus anything the client has already seen.
+  const fallback = () => {
+    const filtered = FALLBACK_SUGGESTIONS.filter((s) => !exclude.includes(s));
+    return filtered.length > 0 ? filtered : FALLBACK_SUGGESTIONS;
+  };
 
   const indexedCount = await prisma.source.count({
     where: { notebookId, status: "INDEXED" },
   });
 
-  // No indexed sources → return generic fallbacks without hitting Qdrant/LLM.
+  // Nothing indexed yet → no suggestions at all. The client hides the bar until
+  // indexing completes, so it never shows questions ungrounded in real sources.
   if (indexedCount === 0) {
-    return sendSuccess(res, { suggestions: FALLBACK_SUGGESTIONS });
+    return sendSuccess(res, { suggestions: [] });
   }
 
   const corpus = await buildCorpusFromQdrant(notebookId);
 
   // Sources marked INDEXED but Qdrant empty (e.g. collection wiped) → fallback.
   if (!corpus) {
-    log.warn({ notebookId }, "no Qdrant chunks for notebook — returning fallback suggestions");
-    return sendSuccess(res, { suggestions: FALLBACK_SUGGESTIONS });
+    log.warn(
+      { notebookId },
+      "no Qdrant chunks for notebook — returning fallback suggestions",
+    );
+    return sendSuccess(res, { suggestions: fallback() });
   }
 
   const model = getModel();
@@ -125,14 +165,14 @@ export const suggest = asyncHandler(async (req, res) => {
   // XAI not configured → graceful fallback.
   if (!model) {
     log.warn("XAI_API_KEY not set — returning fallback suggestions");
-    return sendSuccess(res, { suggestions: FALLBACK_SUGGESTIONS });
+    return sendSuccess(res, { suggestions: fallback() });
   }
 
   try {
     const result = await generateText({
       model,
       system: SYSTEM_PROMPT,
-      prompt: buildPrompt(corpus),
+      prompt: buildPrompt(corpus, exclude),
       temperature: 0.8,
     });
 
@@ -140,16 +180,27 @@ export const suggest = asyncHandler(async (req, res) => {
 
     if (suggestions && suggestions.length > 0) {
       log.debug(
-        { notebookId, count: suggestions.length, corpusChars: corpus.length },
+        {
+          notebookId,
+          count: suggestions.length,
+          corpusChars: corpus.length,
+          excluded: exclude.length,
+        },
         "generated suggestions from Qdrant corpus",
       );
       return sendSuccess(res, { suggestions });
     }
 
-    log.warn({ notebookId, raw: result.text }, "failed to parse suggestions — using fallback");
-    return sendSuccess(res, { suggestions: FALLBACK_SUGGESTIONS });
+    log.warn(
+      { notebookId, raw: result.text },
+      "failed to parse suggestions — using fallback",
+    );
+    return sendSuccess(res, { suggestions: fallback() });
   } catch (err) {
-    log.error({ err, notebookId }, "suggestion generation failed — using fallback");
-    return sendSuccess(res, { suggestions: FALLBACK_SUGGESTIONS });
+    log.error(
+      { err, notebookId },
+      "suggestion generation failed — using fallback",
+    );
+    return sendSuccess(res, { suggestions: fallback() });
   }
 });
