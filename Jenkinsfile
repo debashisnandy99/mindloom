@@ -23,7 +23,7 @@ pipeline {
   parameters {
     string(name: 'VITE_API_URL', defaultValue: 'https://mindloom.debashis.tech', description: 'Public API base URL baked into the client build')
     string(name: 'SERVER_PORT',  defaultValue: '3100', description: 'Host port to publish the API on (3000/3001 are in use)')
-    string(name: 'CLIENT_PORT',  defaultValue: '8080', description: 'Host port to publish the client on')
+    string(name: 'CLIENT_PORT',  defaultValue: '8180', description: 'Host port to publish the client on')
     booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Deploy after a successful build')
   }
 
