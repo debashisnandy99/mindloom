@@ -17,7 +17,11 @@ RUN bun install --frozen-lockfile
 # Server sources (incl. prisma/schema.prisma) then build:
 #   `bun run build` == `prisma generate && tsc -p tsconfig.json`
 COPY server ./server
-RUN cd server && bun run build
+# prisma.config.ts resolves env("DATABASE_URL") at load time — even for
+# `prisma generate`, which never connects. Provide a throwaway value scoped to
+# this RUN so the build succeeds; the real URL is injected at runtime via the
+# compose env_file. This placeholder is fake and never persists in the image.
+RUN cd server && DATABASE_URL="postgresql://build:build@localhost:5432/build" bun run build
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Runtime stage — plain Node (the app's `start` script uses `node`). Prisma 7

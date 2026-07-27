@@ -46,20 +46,19 @@ pipeline {
 
     // Fast feedback before building images. Runs the Bun toolchain in a
     // throwaway container over this workspace (no Docker Pipeline plugin needed).
-    // The production env is passed in via --env-file so anything env-dependent
-    // (e.g. `prisma generate` reading prisma.config.ts) has what it needs.
+    // `bun run typecheck` runs `prisma generate`, whose prisma.config.ts resolves
+    // env("DATABASE_URL") at load time — so pass a throwaway value (generate never
+    // connects). No real credential needed here; the real URL is used at runtime.
     stage('Lint & Typecheck') {
       steps {
-        withCredentials([file(credentialsId: 'mindloom-server-env', variable: 'SERVER_ENV_FILE')]) {
-          sh '''
-            docker run --rm \
-              -u "$(id -u):$(id -g)" -e HOME=/tmp \
-              --env-file "$SERVER_ENV_FILE" \
-              -v "$PWD":/app -w /app \
-              oven/bun:1 \
-              sh -c "bun install --frozen-lockfile && bun run lint && bun run typecheck"
-          '''
-        }
+        sh '''
+          docker run --rm \
+            -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            -e DATABASE_URL="postgresql://build:build@localhost:5432/build" \
+            -v "$PWD":/app -w /app \
+            oven/bun:1 \
+            sh -c "bun install --frozen-lockfile && bun run lint && bun run typecheck"
+        '''
       }
     }
 
