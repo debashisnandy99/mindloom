@@ -57,6 +57,17 @@ const envSchema = z.object({
   XAI_MODEL: z.string().default("grok-4.5"),
   XAI_BASE_URL: z.string().optional(),
 
+  // ── Supadata (YouTube transcript API) ───────────────────────────────────
+  // Server-side transcript scraping is blocked from datacenter IPs, so in
+  // production we fetch transcripts via Supadata. Without a key the extractor
+  // falls back to direct scraping (fine for local/residential IPs).
+  SUPADATA_API_KEY: z.string().optional(),
+  SUPADATA_BASE_URL: z.url().default("https://api.supadata.ai/v1"),
+  /** native = existing captions only, generate = ASR only, auto = native then ASR. */
+  SUPADATA_TRANSCRIPT_MODE: z
+    .enum(["native", "generate", "auto"])
+    .default("auto"),
+
   // ── Retrieval tuning ────────────────────────────────────────────────────
   /** Chunks handed to the generator after fusion. */
   RETRIEVAL_TOP_K: z.coerce.number().int().positive().default(8),

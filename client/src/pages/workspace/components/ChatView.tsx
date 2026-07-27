@@ -1,10 +1,4 @@
-import {
-  Fragment,
-  useEffect,
-  useRef,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, type KeyboardEvent } from "react";
 import type {
   ChatQuery,
   QueryToSource,
@@ -12,6 +6,8 @@ import type {
   ServerSourceType,
 } from "../../../api/types";
 import { Icon } from "../../../components/Icon";
+import { AnswerMarkdown } from "./AnswerMarkdown";
+import { chunkToLocator } from "./citations";
 import { useChatHistory } from "../../../hooks/queries/useChatHistory";
 import { useSources } from "../../../hooks/queries/useSources";
 import { useSuggestions } from "../../../hooks/queries/useSuggestions";
@@ -218,20 +214,6 @@ const emptyStyle = {
   textAlign: "center" as const,
 };
 
-function chunkToLocator(c: RetrievedChunk): CitationLocator | null {
-  if (!c.sourceId || !c.sourceType) return null;
-  return {
-    sourceId: c.sourceId,
-    sourceType: c.sourceType,
-    contentUrl: c.contentUrl,
-    timestamp: c.timestamp,
-    startSeconds: c.startSeconds,
-    pageNumber: c.pageNumber,
-    chunkText: c.text,
-    label: c.label ?? c.sourceName,
-  };
-}
-
 /** One chip per source, keeping the best-scoring chunk's locator. */
 function chunksToChips(citations: RetrievedChunk[]): CiteChip[] {
   const best = new Map<string, RetrievedChunk>();
@@ -339,10 +321,12 @@ function BotBubble({
         <Icon d="M4 9h16M4 15h16M9 4v16M15 4v16" size={14} sw={2.2} />
       </div>
       <div className="chat-view__bubble--bot-body">
-        <span className="chat-view__bubble--bot-text">
-          {renderAnswerWithCites(text, indexedCitations, onOpenCite)}
-        </span>
-        {streaming && <span style={{ opacity: 0.6 }}>▌</span>}
+        <AnswerMarkdown
+          text={text}
+          citations={indexedCitations}
+          onOpenCite={onOpenCite}
+        />
+        {streaming && <span className="chat-view__bubble--bot-caret">▌</span>}
         {cites.length > 0 && (
           <span className="chat-view__bubble--bot-cites">
             {cites.map((c) => (
@@ -361,45 +345,4 @@ function BotBubble({
       </div>
     </div>
   );
-}
-
-/** Turns `[1]` / `[2][3]` markers into clickable chips mapped to citation index. */
-function renderAnswerWithCites(
-  text: string,
-  citations: RetrievedChunk[],
-  onOpenCite: (locator: CitationLocator) => void,
-): ReactNode {
-  if (!text) return null;
-
-  const parts = text.split(/(\[\d+\])/g);
-  return parts.map((part, i) => {
-    const match = /^\[(\d+)\]$/.exec(part);
-    if (!match) return <Fragment key={i}>{part}</Fragment>;
-
-    const index = Number(match[1]) - 1;
-    const chunk = citations[index];
-    const locator = chunk ? chunkToLocator(chunk) : null;
-    if (!locator) {
-      return (
-        <span
-          key={i}
-          className="chat-view__bubble--bot-cite-inline chat-view__bubble--bot-cite-inline-dead"
-        >
-          {part}
-        </span>
-      );
-    }
-
-    return (
-      <button
-        key={i}
-        type="button"
-        onClick={() => onOpenCite(locator)}
-        title={locator.label ?? chunk.sourceName}
-        className="chat-view__bubble--bot-cite-inline ml-cite"
-      >
-        {part}
-      </button>
-    );
-  });
 }
