@@ -49,3 +49,6 @@ coverage/
 .cache/
 tmp/
 temp/
+
+# Deploy configs (nginx, prod env template) — copied to the VPS via scp, not committed
+deploy/

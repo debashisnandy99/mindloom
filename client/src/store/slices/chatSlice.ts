@@ -6,12 +6,10 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
  */
 export interface ChatState {
   draft: string
-  sugIdx: number
 }
 
 const initialState: ChatState = {
   draft: '',
-  sugIdx: 0,
 }
 
 export const chatSlice = createSlice({
@@ -24,12 +22,9 @@ export const chatSlice = createSlice({
     clearDraft(state) {
       state.draft = ''
     },
-    incrementSugIdx(state) {
-      state.sugIdx += 1
-    },
   },
 })
 
-export const { setDraft, clearDraft, incrementSugIdx } = chatSlice.actions
+export const { setDraft, clearDraft } = chatSlice.actions
 
 export default chatSlice.reducer
