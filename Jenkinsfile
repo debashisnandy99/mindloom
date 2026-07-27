@@ -44,16 +44,17 @@ pipeline {
       }
     }
 
-    // Fast feedback before building images. Uses the Bun toolchain in a
-    // throwaway container, reusing this workspace.
+    // Fast feedback before building images. Runs the Bun toolchain in a
+    // throwaway container over this workspace (no Docker Pipeline plugin needed).
     stage('Lint & Typecheck') {
-      agent {
-        docker { image 'oven/bun:1'; reuseNode true }
-      }
       steps {
-        sh 'bun install --frozen-lockfile'
-        sh 'bun run lint'
-        sh 'bun run typecheck'
+        sh '''
+          docker run --rm \
+            -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$PWD":/app -w /app \
+            oven/bun:1 \
+            sh -c "bun install --frozen-lockfile && bun run lint && bun run typecheck"
+        '''
       }
     }
 
