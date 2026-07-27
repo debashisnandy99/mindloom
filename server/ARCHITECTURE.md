@@ -23,35 +23,41 @@ memory.
 │      API process        │         │     Worker process      │
 │   (src/index.ts)        │         │ (src/workers/           │
 │                         │         │      indexing.worker.ts)│
-│  Express HTTP server    │         │  BullMQ Worker          │
-│  - REST + SSE           │         │  - extract → chunk →    │
-│  - enqueues jobs        │         │    embed → upsert       │
-│  - subscribes to SSE    │         │  - publishes progress   │
+│  Express HTTP server    │         │  Two BullMQ Workers:    │
+│  - REST + SSE           │         │  - indexing:  extract → │
+│  - streams RAG answers  │         │    chunk → embed →upsert│
+│  - enqueues jobs        │         │  - tool-gen:  LLM →     │
+│  - subscribes to SSE    │         │    study artifacts      │
+│                         │         │  - publishes progress   │
 └───────────┬─────────────┘         └───────────┬─────────────┘
             │                                     │
             │   BullMQ (jobs)  +  Pub/Sub (events)│
             └──────────────┬──────────────────────┘
                            ▼
-        ┌────────┐  ┌────────┐  ┌────────┐  ┌──────┐
-        │ Redis  │  │Postgres│  │ Qdrant │  │  S3  │
-        │queue + │  │ Prisma │  │vectors │  │ PDFs │
-        │session+│  │        │  │        │  │      │
-        │pub/sub │  │        │  │        │  │      │
-        └────────┘  └────────┘  └────────┘  └──────┘
+   ┌────────┐ ┌────────┐ ┌────────┐ ┌──────┐ ┌──────────────┐
+   │ Redis  │ │Postgres│ │ Qdrant │ │  S3  │ │  LLM APIs    │
+   │queue + │ │ Prisma │ │vectors │ │ PDFs │ │ OpenAI embed │
+   │session+│ │        │ │        │ │      │ │ + tool gen,  │
+   │pub/sub │ │        │ │        │ │      │ │ xAI answers  │
+   └────────┘ └────────┘ └────────┘ └──────┘ └──────────────┘
 ```
 
-Why split: chunking, embedding (network calls to OpenAI), and S3 uploads are
-slow and CPU/IO-heavy. Keeping them in a dedicated worker means the API event
-loop stays responsive while a large PDF is being indexed. `POST /sources`
-returns `202 Accepted` almost immediately; the actual work happens out of band.
+Why split: chunking, embedding (network calls to OpenAI), S3 uploads, and LLM
+tool generation are slow and CPU/IO-heavy. Keeping them in a dedicated worker
+means the API event loop stays responsive while a large PDF is being indexed.
+`POST /sources` returns `202 Accepted` almost immediately; the actual work
+happens out of band. (RAG *answering* is the exception — it streams live from
+the API process straight to the browser, see §6.)
 
 - **API** — `bun run dev` → `src/index.ts` → `createApp()` in `src/app.ts`.
-- **Worker** — `bun run dev:worker` → `src/workers/indexing.worker.ts`.
+- **Worker** — `bun run dev:worker` → `src/workers/indexing.worker.ts`, which
+  starts **two** BullMQ workers: the indexing queue (§4) and the tool-generation
+  queue (§5b).
 
 Both register `SIGINT`/`SIGTERM` handlers for **graceful shutdown**: the API
 stops accepting connections, drains SSE clients, closes the queue, and
-disconnects Postgres/Redis; the worker calls `worker.close()` which waits for
-in-flight jobs so a restart never drops work.
+disconnects Postgres/Redis; the worker calls `worker.close()` on both workers,
+which waits for in-flight jobs so a restart never drops work.
 
 ---
 
@@ -63,7 +69,8 @@ in-flight jobs so a restart never drops work.
 | **Redis** | Three distinct uses: (1) BullMQ job queue, (2) session store via `connect-redis`, (3) pub/sub channel for indexing progress events. | `config/redis.ts` |
 | **Qdrant** | Vector database. **One collection per notebook** (`notebook_<uuid>`), cosine distance, `sourceId` payload index for per-source filter/delete. | `config/qdrant.ts`, `services/indexing/vectorStore.ts` |
 | **AWS S3** | Stores uploaded **PDF files only**. The bucket stays private; reads go through time-limited presigned URLs. | `config/s3.ts`, `services/storage/s3.service.ts` |
-| **OpenAI** | Embeddings (`text-embedding-3-large`, 3072 dims). Batched at 64 texts/request. | `services/indexing/embedder.ts` |
+| **OpenAI** | Three roles: embeddings (`text-embedding-3-large`, 3072 dims, batched); query rewriting before retrieval (`QUERY_REWRITE_MODEL`); and study-tool generation as structured output (`TOOL_GENERATION_MODEL`). | `services/indexing/embedder.ts`, `services/retrieval/queryRewriter.ts`, `services/generation/tool-generation.service.ts` |
+| **xAI (Grok)** | Grounded RAG answer generation (`XAI_MODEL`, default `grok-4.5`) via the Vercel AI SDK, streaming + non-streaming, plus starter-question suggestions. **Optional** — the key is not required at boot; retrieval endpoints fail with a clear message if it is missing. | `services/generation/answer.service.ts`, `controllers/suggestion.controller.ts` |
 
 Redis needs **multiple connections** because of protocol constraints, all
 minted from `config/redis.ts`:
@@ -102,10 +109,11 @@ malformed variable fails the process fast with a printed list of issues.
 ├── /notebooks   requireAuth   → notebook.routes.ts
 │   └── /:notebookId  loadNotebook (ownership check)
 │       ├── GET/PATCH/DELETE            notebook CRUD
-│       ├── /events        (SSE)        indexing stream
+│       ├── /events        (SSE)        indexing + tool-gen stream (§7)
 │       ├── /sources                    nested source router (create/list)
-│       ├── /queries, /query, /search   retrieval (see §6)
-│       └── /<tool>                     7 tool routers (see §5)
+│       ├── /query, /query/stream, /search, /suggestions, /queries   retrieval (§6)
+│       ├── /tools/status, /tools/generate   tool-gen status + manual re-queue (§5b)
+│       └── /<tool>                     7 tool CRUD routers (§5a)
 └── /sources     requireAuth   → source.routes.ts
     └── /:sourceId  loadSourceNotebook  (ownership via parent notebook)
         ├── GET/DELETE
@@ -268,7 +276,7 @@ re-sorted by `index` because the API may return items out of order.
 
 ---
 
-## 5. Study tools — factory-generated CRUD
+## 5a. Study tools — factory-generated CRUD
 
 There are **seven tools**: mind map, quiz, concept table, flashcards, summary,
 audio overview, timeline. Six follow the identical shape — *one artifact per
@@ -304,43 +312,144 @@ Child paths per tool: `nodes`, `questions`, `rows`, `cards`, `points`,
 
 ---
 
-## 6. Retrieval & generation — implemented vs stubbed
+## 5b. Tool generation — LLM artifacts on a second queue
 
-This is important to state plainly because the endpoints exist and return
-success but do not yet do the AI work:
+Six of the seven tools (all but audio overview — `GENERATED_TOOL_KINDS`) can be
+**generated by an LLM** from the notebook's indexed content. This runs on a
+**separate BullMQ queue** (`tool-generation`, `services/generation/queue.ts`)
+processed by the *same worker process* as indexing (§1), at concurrency
+`TOOL_GENERATION_CONCURRENCY`.
+
+### Trigger and revisioning
+
+Generation is queued automatically whenever a notebook's sources change — add,
+reindex, or delete all call `regenerateNotebookTools`
+(`services/generation/regenerate.ts`) — or manually via
+`POST /notebooks/:id/tools/generate`. Each tool has a `ToolGeneration` row with
+a monotonic **`revision`**:
+
+```
+markQueued(nb, kind)  → status QUEUED, revision++   → enqueue job stamped with that revision
+```
+
+The revision is the concurrency-safety mechanism. The job id is
+`<notebookId>_<kind>_<revision>`, older *pending* jobs for the same tool are
+removed at enqueue time, and the processor re-checks `currentRevision` both
+before starting and after the LLM call — if a newer edit has bumped the
+revision mid-generation, the stale result is **discarded rather than written**,
+so a slow job can never clobber fresher output.
+
+### Processing (`services/generation/processor.ts`)
+
+```
+1. superseded?  (revision < currentRevision) → skip
+2. status → PROCESSING, progress 5           ── publish "tool" SSE event
+3. generateTool(nb, kind, onProgress)        (tool-generation.service.ts)
+4. superseded during generation? → discard
+5. no indexed content left? → clearTool + status IDLE
+6. status → READY, progress 100, generatedMs ── publish "tool" SSE event
+   on throw: status → FAILED, errorMessage    ── publish "tool" SSE event
+```
+
+`generateTool` builds a context corpus from the notebook's chunks
+(`scrollChunks`, capped at `TOOL_CONTEXT_BUDGET` chars) and calls the AI SDK's
+`generateObject` with OpenAI `TOOL_GENERATION_MODEL` and a **per-tool Zod
+schema** (`schemas.ts`) so the output is structurally valid before it is
+upserted through the tool's model module. Status transitions are
+`IDLE → QUEUED → PROCESSING → READY | FAILED`, each carrying a 0–100 `progress`
+streamed to the browser as a `tool` SSE event (§7).
+
+On worker startup, `requeueQueuedToolGenerations` re-enqueues any rows left in
+`QUEUED` (e.g. a crash mid-flight), so pending work survives a restart.
+
+---
+
+## 6. Retrieval & answering (RAG) — fully implemented
+
+`POST /notebooks/:id/query` (and its streaming twin `/query/stream`) run a
+complete RAG pipeline in `services/retrieval/` + `services/generation/`.
+
+### Retrieve (`retrieval.service.ts`)
+
+```
+rewriteQuery(q)              (queryRewriter.ts — OpenAI QUERY_REWRITE_MODEL)
+  → { original, rephrased, stepBack }        // fail-open: on error, use original
+embedTexts([variants])        one batched embedding call for all three variants
+  → searchChunks per variant  (RETRIEVAL_CANDIDATES each, optional sourceId filter)
+  → fuse with Reciprocal Rank Fusion (RRF_K = 60)
+  → drop chunks below RETRIEVAL_MIN_SCORE
+  → keep top RETRIEVAL_TOP_K
+```
+
+Query **rewriting** widens recall: `rephrased` restates the question in
+declarative document vocabulary (embeds closer to source prose), `stepBack`
+asks the broader conceptual question. **RRF** fuses the per-variant lists by
+rank rather than raw score, so variants on different similarity scales combine
+cleanly. The **threshold** is what makes an off-topic question return *nothing*
+instead of dredging up loosely-related chunks.
+
+### Answer (`generation/answer.service.ts`)
+
+If retrieval finds nothing above threshold, the answer is the constant
+`NO_CONTEXT_MESSAGE` — the system refuses rather than hallucinating. Otherwise
+the retrieved chunks are rendered as **numbered context passages** (`[1]`,
+`[2]`, …, each with a source locator from the Qdrant payload — PDF page or
+YouTube timestamp) and sent to **xAI Grok** (`XAI_MODEL`) with a strict
+grounding system prompt. The model cites passages as `[n]`, and the citation
+array sent to the client is in the same order, so `[2]` in the prose maps to
+`citations[1]`.
+
+Two transports:
+
+- **`POST /query`** (`generateGroundedAnswer`) — non-streaming; persists and
+  returns the full answer.
+- **`POST /query/stream`** (`streamGroundedAnswer`) — retrieval runs first (so a
+  failure is still a clean JSON error), then the answer streams over **SSE**:
+  `meta` (citations) ▸ `delta`* (text chunks) ▸ `done` (persisted `queryId`) or
+  `error`. An `AbortController` wired to `res.on("close")` stops upstream
+  generation if the client disconnects, and a partial answer from a dropped
+  connection is **not** persisted.
+
+Both persist the question + answer + citations to the `Query` / `QueryToSource`
+tables. `POST /search` returns the fused chunks with no generation.
+`GET /suggestions` uses xAI to propose starter questions from the corpus, with a
+static fallback list if the key is absent or the call fails.
 
 | Area | Status |
 | --- | --- |
 | Source indexing (extract→chunk→embed→store) | ✅ implemented |
-| Vector search primitives (`searchChunks`, `embedQuery`) | ✅ implemented |
+| Vector search + RRF retrieval, thresholding | ✅ implemented |
+| RAG answering (xAI, streaming + non-streaming, cited) | ✅ implemented |
+| Tool generation (OpenAI structured output, 6 tools) | ✅ implemented |
 | Tool artifact CRUD (all 7) | ✅ implemented |
-| **RAG retrieval / answering** (`services/retrieval/retrieval.service.ts`) | ⛔ **stub** — `retrieveRelevantChunks`, `answerQuery`, `streamAnswer` return empty |
-| **Tool generation** (`services/generation/tool-generation.service.ts`) | ⛔ **stub** — `generate*` return `null` |
 
-So `POST /notebooks/:id/query` today **persists the question** and its (empty)
-citations to the `Query` / `QueryToSource` tables and returns an empty answer;
-`POST /search` returns `[]`. The wiring, persistence, and schema are all in
-place — only the model-driven middle is deferred. The building blocks it will
-use (`embedQuery` + `searchChunks`) already exist in the indexing layer.
+xAI is **optional at boot**: the model is built lazily, so a missing
+`XAI_API_KEY` fails an individual query/suggestion request with a clear message
+instead of crashing startup.
 
 ---
 
 ## 7. Live progress — Redis pub/sub → SSE
 
-Because indexing runs in a *different process* from the one holding the
-browser's connection, progress can't be pushed directly. The path is:
+Because indexing and tool generation run in a *different process* from the one
+holding the browser's connection, progress can't be pushed directly. The path
+is:
 
 ```
-Worker (processor.ts)
-  publishIndexingEvent(evt)
+Worker (indexing processor.ts / tool-gen processor.ts)
+  publishIndexingEvent(evt)  /  publishToolEvent(evt)
       │  Redis PUBLISH  indexing:notebook:<notebookId>
       ▼
 API process (sse.service.ts subscriber)
   on "message" → fan out to every SSE client registered for that notebook
-      │  res.write("event: indexing\ndata: {...}")
+      │  res.write("event: indexing\ndata: {...}")   // or  event: tool
       ▼
 Browser  EventSource( /notebooks/:id/events )
 ```
+
+The single `/notebooks/:id/events` stream carries **two event types** on the
+same notebook channel: `indexing` (source status/progress, §4) and `tool`
+(tool-generation status/progress, §5b).
 
 Details (`services/sse/sse.service.ts`, `controllers/events.controller.ts`):
 
@@ -370,6 +479,7 @@ Notebook ──1 FlashcardDeck  ──< Flashcard
 Notebook ──1 Summary        ──< SummaryPoint
 Notebook ──1 AudioOverview  (PENDING → PROCESSING → READY | FAILED)
 Notebook ──1 Timeline       ──< TimelineEvent
+Notebook ──< ToolGeneration (one row per generated tool: IDLE → QUEUED → PROCESSING → READY | FAILED)
 ```
 
 Notes:
@@ -382,6 +492,11 @@ Notes:
   `errorMessage`, plus cheap derived `keyPoints` / `excerpts` for the viewer.
 - Each tool artifact is `@unique` on `notebookId` (one per notebook); children
   carry an `order` field for stable UI ordering.
+- **`ToolGeneration`** tracks LLM generation state separately from the artifact
+  itself: `@@unique([notebookId, kind])`, with `status`, `progress`, `message`,
+  `errorMessage`, `generatedMs`, and the `revision` counter that drives
+  supersession (§5b). Audio overview has no `ToolGeneration` row — it is not
+  LLM-generated here.
 
 ---
 
@@ -394,19 +509,21 @@ src/
 ├── env.ts              Zod-validated env, fails fast at boot
 ├── config/             prisma, redis, qdrant, s3, session, passport
 ├── models/             Prisma data access (plain funcs, no Express types)
-│   └── tools/          one module per tool artifact
-├── controllers/        request handlers (+ tools/ factory)
+│   ├── tools/          one module per tool artifact
+│   └── toolGeneration.model.ts   generation status/revision rows
+├── controllers/        request handlers (+ tools/ factory, query, suggestion, toolGeneration)
 ├── routes/             URL surface under /api/v1 (+ tools/ factory)
 ├── middlewares/        auth, validate, upload, rateLimit, csrf, error, asyncHandler
 ├── validators/         Zod schemas
 ├── services/
 │   ├── indexing/       queue, extractors/, chunker, embedder, vectorStore, processor
-│   ├── retrieval/      RAG (stub)
-│   ├── generation/     tool generation (stub)
+│   ├── retrieval/      RAG: retrieval.service (RRF), queryRewriter
+│   ├── generation/     answer.service (xAI), tool-generation.service (OpenAI),
+│   │                   queue, processor, regenerate, schemas
 │   ├── storage/        S3
 │   └── sse/            Redis pub/sub → SSE fan-out
-├── types/              shared indexing types, express augmentation
-└── workers/            BullMQ worker entrypoint
+├── types/              shared indexing + generation types, express augmentation
+└── workers/            BullMQ worker entrypoint (indexing + tool-gen)
 ```
 
 Layering convention: **models** hold Prisma access and know nothing about
@@ -419,13 +536,22 @@ Express; **controllers** speak HTTP and delegate to models/services;
 ## 10. Boot & operational notes
 
 - `bun run build` = `prisma generate` then `tsc` → `dist/`; run with
-  `bun start` (API) and `bun run start:worker` (worker).
+  `bun start` (API) and `bun run start:worker` (worker — starts both queues).
 - Infra (`compose.yaml`) brings up **Redis** and **Qdrant** locally; Postgres
-  and S3 are expected to be provided (managed or otherwise) via env.
+  and S3 are expected to be provided (managed or otherwise) via env. OpenAI is
+  required (embeddings); xAI (`XAI_API_KEY`) is optional and only affects RAG
+  answering + suggestions.
+- Key env for the AI layer: `OPENAI_API_KEY`, `QUERY_REWRITE_MODEL`,
+  `TOOL_GENERATION_MODEL`, `TOOL_GENERATION_CONCURRENCY`, `TOOL_CONTEXT_BUDGET`,
+  `XAI_API_KEY`/`XAI_MODEL`, and retrieval tuning
+  `RETRIEVAL_TOP_K` / `RETRIEVAL_CANDIDATES` / `RETRIEVAL_MIN_SCORE`
+  (all validated in `env.ts`, see `.env.example`).
 - Dev helpers: `scripts/make-dev-session.ts` mints a signed session cookie
   without an OAuth round-trip; `scripts/publish-test-event.ts` injects a fake
   progress event to exercise the SSE relay end-to-end.
 - Failure isolation: an unreachable Qdrant/S3 degrades gracefully on delete
-  paths (best-effort), OpenAI failures fail the *job* (retried) not the API, and
-  a crashed worker is safe to restart (in-flight jobs drain, others re-run).
+  paths (best-effort); OpenAI/xAI failures fail the *request or job* (retried for
+  jobs) not the whole API; query rewriting is fail-open (falls back to the raw
+  query); a crashed worker is safe to restart — in-flight jobs drain, and
+  `QUEUED` tool generations are re-enqueued on startup.
 ```

@@ -1,0 +1,97 @@
+# Production stack for Mindloom, deployed by the Jenkinsfile over SSH.
+#
+# Images are built + pushed by CI; this file only pulls + runs them.
+#   REGISTRY   e.g. registry.example.com/mindloom  (no trailing slash)
+#   IMAGE_TAG  the immutable tag CI pushed (git short SHA), default "latest"
+#
+# Postgres is expected to be a managed/external DB (DATABASE_URL in server/.env,
+# e.g. Neon), so it is not run here. Redis + Qdrant run locally.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: mindloom-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: mindloom-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: apply Prisma migrations before the API/worker start.
+  migrate:
+    image: mindloom-server:${IMAGE_TAG:-latest}
+    container_name: mindloom-migrate
+    restart: "no"
+    env_file:
+      - server/.env
+    working_dir: /app/server
+    command: ["npx", "prisma", "migrate", "deploy"]
+
+  server:
+    image: mindloom-server:${IMAGE_TAG:-latest}
+    container_name: mindloom-server
+    restart: unless-stopped
+    env_file:
+      - server/.env
+    ports:
+      # Bound to loopback only — reachable through the host nginx, never
+      # directly from the internet. Host port avoids the taken 3000/3001.
+      - "127.0.0.1:${SERVER_PORT:-3100}:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Same image as the API, different entrypoint: the BullMQ indexing worker.
+  worker:
+    image: mindloom-server:${IMAGE_TAG:-latest}
+    container_name: mindloom-worker
+    restart: unless-stopped
+    env_file:
+      - server/.env
+    command: ["node", "dist/workers/indexing.worker.js"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  client:
+    image: mindloom-client:${IMAGE_TAG:-latest}
+    container_name: mindloom-client
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${CLIENT_PORT:-8080}:80"
+    depends_on:
+      - server
+
+volumes:
+  redis_data:
+  qdrant_data:
